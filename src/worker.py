@@ -37,6 +37,7 @@ TDL_STATS_RE = re.compile(
 class Worker(QThread):
     logMessage = pyqtSignal(str)
     taskFinished = pyqtSignal(int)
+    taskFailedWithLog = pyqtSignal(int, str)
 
     # New signals for structured data
     downloadStarted = pyqtSignal(str)
@@ -59,12 +60,16 @@ class Worker(QThread):
 
     def run(self):
         overall_return_code = 0
+        full_log = []
 
         for i, command in enumerate(self.commands):
             if self._is_stopped:
                 break
 
-            self.logMessage.emit(f"--- Running task {i+1}/{len(self.commands)}: {' '.join(command)} ---")
+            task_intro = f"--- Running task {i+1}/{len(self.commands)}: {' '.join(command)} ---"
+            self.logMessage.emit(task_intro)
+            full_log.append(task_intro)
+
             try:
                 self.process = subprocess.Popen(
                     command,
@@ -84,6 +89,8 @@ class Worker(QThread):
                     line = line.strip()
                     if not line:
                         continue
+
+                    full_log.append(line)
 
                     # Check for a completed file first
                     done_match = TDL_DONE_RE.search(line)
@@ -161,21 +168,32 @@ class Worker(QThread):
 
                 if return_code != 0:
                     overall_return_code = return_code
+                    log_output = "\n".join(full_log)
+                    self.taskFailedWithLog.emit(return_code, log_output)
                     self.logMessage.emit(f"Task failed with exit code {return_code}. Halting execution.")
                     break
 
             except subprocess.TimeoutExpired:
                 self.process.kill()
-                self.logMessage.emit(f"[ERROR] Command timed out after {self.timeout} seconds. Process terminated.")
+                error_message = f"[ERROR] Command timed out after {self.timeout} seconds. Process terminated."
+                self.logMessage.emit(error_message)
+                full_log.append(error_message)
                 overall_return_code = -1
+                self.taskFailedWithLog.emit(overall_return_code, "\n".join(full_log))
                 break
             except FileNotFoundError:
-                self.logMessage.emit(f"[ERROR] Command not found: {command[0]}")
+                error_message = f"[ERROR] Command not found: {command[0]}"
+                self.logMessage.emit(error_message)
+                full_log.append(error_message)
                 overall_return_code = -1
+                self.taskFailedWithLog.emit(overall_return_code, "\n".join(full_log))
                 break
             except Exception as e:
-                self.logMessage.emit(f"[ERROR] An unexpected error occurred: {e}")
+                error_message = f"[ERROR] An unexpected error occurred: {e}"
+                self.logMessage.emit(error_message)
+                full_log.append(error_message)
                 overall_return_code = -1
+                self.taskFailedWithLog.emit(overall_return_code, "\n".join(full_log))
                 break
 
         self.taskFinished.emit(overall_return_code)

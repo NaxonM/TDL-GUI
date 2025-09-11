@@ -6,6 +6,7 @@ import glob
 import json
 import tempfile
 import urllib.request
+import subprocess
 from PyQt6.QtCore import pyqtSignal, QDir, QUrl, QDate, QDateTime, Qt, QSize
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
@@ -583,26 +584,47 @@ class MainWindow(QMainWindow):
             self.log_message.emit("Settings dialog cancelled.")
 
     def handle_login_request(self, namespace):
+        """Triggers the interactive login process."""
+        # Close the settings dialog
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, SettingsDialog):
+                widget.close()
+
+        self.start_interactive_login(namespace)
+
+    def start_interactive_login(self, namespace):
+        """Launches an external terminal to run the interactive tdl login."""
         if self.worker is not None and self.worker.isRunning():
-            self.log_message.emit("A task is already running. Please wait.")
+            self.log_message.emit("A task is already running. Please wait for it to complete before logging in.")
             return
-        self.log_message.emit(f"Starting login process for account: '{namespace}'...")
-        command = [self.tdl_path, 'login', '--ns', namespace]
+
+        self.log_message.emit("Opening a terminal for interactive login...")
+
+        command = [self.tdl_path, 'login', '-T', 'code', '--ns', namespace]
+
+        # Add any relevant global flags from settings
         command.extend(self._get_proxy_args())
         command.extend(self._get_storage_args())
         if self.settings.get('debug_mode', False):
             command.append('--debug')
-        command.extend(self._get_ntp_args())
-        command.extend(self._get_reconnect_timeout_args())
-        timeout = self.settings.get('command_timeout', 300)
-        self.worker = Worker(command, self.tdl_path, timeout=timeout)
-        self.worker.logMessage.connect(self.append_log)
-        self.worker.taskFinished.connect(self._task_finished)
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, SettingsDialog):
-                widget.close()
-        self.worker.start()
-        self.set_download_ui_state(is_downloading=True)
+
+        try:
+            # For Windows, use 'start' to open a new command prompt window.
+            # The command is joined into a string to be executed by cmd.
+            full_command = ' '.join([f'"{c}"' if ' ' in c else c for c in command])
+            subprocess.Popen(f'start "tdl Login" cmd /K "{full_command}"', shell=True)
+
+            QMessageBox.information(
+                self,
+                "Login Terminal Opened",
+                f"A new terminal window has been opened to log into the '{namespace}' account.\n\n"
+                "Please follow the instructions in the terminal. After you have successfully logged in, you can close the terminal window.\n\n"
+                "You may need to restart the application for all changes to take effect."
+            )
+
+        except Exception as e:
+            self.log_message.emit(f"[ERROR] Failed to open login terminal: {e}")
+            QMessageBox.critical(self, "Error", f"Could not open the login terminal.\n\n{e}")
 
     def select_destination_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Destination Directory", QDir.homePath())
@@ -716,6 +738,7 @@ class MainWindow(QMainWindow):
         self.worker = Worker(command, self.tdl_path, timeout=timeout)
         self.worker.logMessage.connect(self.append_log)
         self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
         self.worker.downloadStarted.connect(self.add_download_progress_widget)
         self.worker.downloadProgress.connect(self.update_download_progress)
         self.worker.downloadFinished.connect(self.remove_download_progress_widget)
@@ -807,6 +830,7 @@ class MainWindow(QMainWindow):
         self.worker = Worker(command, self.tdl_path, timeout=timeout)
         self.worker.logMessage.connect(self.append_log)
         self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
         self.worker.start()
         self.set_download_ui_state(is_downloading=True)
 
@@ -848,6 +872,7 @@ class MainWindow(QMainWindow):
         self.worker = Worker(command, self.tdl_path, timeout=timeout)
         self.worker.logMessage.connect(self.append_log)
         self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
         self.worker.start()
         self.set_download_ui_state(is_downloading=True)
 
@@ -898,3 +923,13 @@ class MainWindow(QMainWindow):
         if reconnect_timeout and reconnect_timeout != '5m' and reconnect_timeout != '0s':
             return ['--reconnect-timeout', reconnect_timeout]
         return []
+
+    def _task_failed(self, exit_code, log_output):
+        """Handles the taskFailedWithLog signal from the worker."""
+        if "not authorized" in log_output:
+            QMessageBox.warning(
+                self,
+                "Authentication Required",
+                "The operation failed because you are not logged in.\n\n"
+                "Please go to Tools > Settings and use the 'Login to New Account' button to log in."
+            )
