@@ -575,56 +575,33 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, "About tdl GUI", "<h3>tdl GUI</h3><p>A graphical user interface for the tdl command-line tool.</p><p>Built with PyQt6.</p>")
 
     def open_settings_dialog(self):
-        dialog = SettingsDialog(self.settings, self)
-        dialog.login_requested.connect(self.handle_login_request)
+        dialog = SettingsDialog(self.tdl_path, self.settings, self)
+        dialog.desktop_login_requested.connect(self.handle_desktop_login)
         if dialog.exec():
             self.settings.update(dialog.settings)
             self.log_message.emit(f"Settings updated. Active account is now '{self.settings['namespace']}'.")
         else:
             self.log_message.emit("Settings dialog cancelled.")
 
-    def handle_login_request(self, namespace):
-        """Triggers the interactive login process."""
-        # Close the settings dialog
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, SettingsDialog):
-                widget.close()
-
-        self.start_interactive_login(namespace)
-
-    def start_interactive_login(self, namespace):
-        """Launches an external terminal to run the interactive tdl login."""
+    def handle_desktop_login(self, path, passcode):
+        """Handles the request to log in from a desktop client."""
         if self.worker is not None and self.worker.isRunning():
-            self.log_message.emit("A task is already running. Please wait for it to complete before logging in.")
+            self.log_message.emit("A task is already running. Please wait.")
             return
 
-        self.log_message.emit("Opening a terminal for interactive login...")
+        self.log_message.emit(f"Attempting to log in from desktop client at: {path}")
+        command = [self.tdl_path, 'login', '-d', path]
+        if passcode:
+            command.extend(['-p', passcode])
 
-        command = [self.tdl_path, 'login', '-T', 'code', '--ns', namespace]
-
-        # Add any relevant global flags from settings
-        command.extend(self._get_proxy_args())
-        command.extend(self._get_storage_args())
-        if self.settings.get('debug_mode', False):
-            command.append('--debug')
-
-        try:
-            # For Windows, use 'start' to open a new command prompt window.
-            # The command is joined into a string to be executed by cmd.
-            full_command = ' '.join([f'"{c}"' if ' ' in c else c for c in command])
-            subprocess.Popen(f'start "tdl Login" cmd /K "{full_command}"', shell=True)
-
-            QMessageBox.information(
-                self,
-                "Login Terminal Opened",
-                f"A new terminal window has been opened to log into the '{namespace}' account.\n\n"
-                "Please follow the instructions in the terminal. After you have successfully logged in, you can close the terminal window.\n\n"
-                "You may need to restart the application for all changes to take effect."
-            )
-
-        except Exception as e:
-            self.log_message.emit(f"[ERROR] Failed to open login terminal: {e}")
-            QMessageBox.critical(self, "Error", f"Could not open the login terminal.\n\n{e}")
+        # This is a non-interactive command, so we can use the standard worker
+        timeout = self.settings.get('command_timeout', 300)
+        self.worker = Worker(command, self.tdl_path, timeout=timeout)
+        self.worker.logMessage.connect(self.append_log)
+        self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
+        self.worker.start()
+        self.set_download_ui_state(is_downloading=True)
 
     def select_destination_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Destination Directory", QDir.homePath())

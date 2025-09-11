@@ -9,13 +9,13 @@ from PyQt6.QtWidgets import QProgressDialog, QMessageBox
 from PyQt6.QtCore import Qt
 
 # --- Configuration ---
-TFL_RELEASES_URL = "https://github.com/iyear/tdl/releases/latest/download/"
+TFL_RELEASES_URL = "https://github.com/iyear/tdl/releases/download/v0.19.1/"
 ASSET_MAP = {
-    ('windows', '64bit'): 'tdl_Windows_x86_64.zip',
-    ('windows', '32bit'): 'tdl_Windows_i386.zip',
-    ('linux', '64bit'): 'tdl_Linux_x86_64.tar.gz',
-    ('darwin', '64bit'): 'tdl_Darwin_x86_64.tar.gz',
-    ('darwin', 'arm64'): 'tdl_Darwin_arm64.tar.gz',
+    ('windows', '64bit'): 'tdl_Windows_64bit.zip',
+    ('windows', '32bit'): 'tdl_Windows_32bit.zip',
+    ('linux', '64bit'): 'tdl_Linux_64bit.tar.gz',
+    ('darwin', '64bit'): 'tdl_MacOS_64bit.tar.gz',
+    ('darwin', 'arm64'): 'tdl_MacOS_arm64.tar.gz',
 }
 
 def get_platform_key():

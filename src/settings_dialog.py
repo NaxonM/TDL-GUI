@@ -6,12 +6,15 @@ from PyQt6.QtWidgets import (
     QFileDialog, QInputDialog, QMessageBox, QSpinBox
 )
 from PyQt6.QtCore import QDir, pyqtSignal
+from login_dialog import LoginDialog
+from qr_code_dialog import QRCodeDialog
 
 class SettingsDialog(QDialog):
-    login_requested = pyqtSignal(str)
+    desktop_login_requested = pyqtSignal(str, str)
 
-    def __init__(self, current_settings, parent=None):
+    def __init__(self, tdl_path, current_settings, parent=None):
         super().__init__(parent)
+        self.tdl_path = tdl_path
         self.settings = current_settings.copy()
 
         self.setWindowTitle("Global Settings & Login")
@@ -47,9 +50,20 @@ class SettingsDialog(QDialog):
         login_group = QGroupBox("Login Methods")
         login_layout = QVBoxLayout()
 
-        login_button = QPushButton("Login to New Account")
-        login_button.clicked.connect(self._handle_login_click)
+        login_button = QPushButton("Login to New Account (Phone & Code)")
+        login_button.clicked.connect(self._handle_code_login_click)
+
+        desktop_login_button = QPushButton("Login from Desktop Client")
+        desktop_login_button.setToolTip("Import a login session from an existing Telegram Desktop installation.")
+        desktop_login_button.clicked.connect(self._handle_desktop_login_click)
+
+        qr_login_button = QPushButton("Login with QR Code")
+        qr_login_button.setToolTip("Login by scanning a QR code with your phone.")
+        qr_login_button.clicked.connect(self._handle_qr_login_click)
+
         login_layout.addWidget(login_button)
+        login_layout.addWidget(qr_login_button)
+        login_layout.addWidget(desktop_login_button)
 
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
@@ -153,17 +167,13 @@ class SettingsDialog(QDialog):
         return widget
 
     def _handle_reset_data(self):
-        """Deletes the entire .tdl directory after confirmation."""
         tdl_dir = os.path.expanduser('~/.tdl')
-
         reply = QMessageBox.warning(
-            self,
-            "Confirm Reset",
+            self, "Confirm Reset",
             f"This will permanently delete the entire TDL data directory, including all accounts, sessions, and logs.\n\nDirectory to be deleted:\n{tdl_dir}\n\n<b>This action cannot be undone.</b> Are you absolutely sure?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
-
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 if os.path.exists(tdl_dir):
@@ -171,12 +181,9 @@ class SettingsDialog(QDialog):
                     QMessageBox.information(self, "Success", f"Successfully deleted {tdl_dir}.")
                 else:
                     QMessageBox.information(self, "Not Found", f"The directory {tdl_dir} does not exist.")
-
-                # Refresh account list
                 self._populate_accounts()
                 self.account_combo.setCurrentText("default")
                 self.settings['namespace'] = 'default'
-
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to delete directory: {e}")
 
@@ -185,36 +192,77 @@ class SettingsDialog(QDialog):
         if directory:
             self.storage_path_input.setText(directory)
 
-    def _handle_login_click(self):
+    def _handle_code_login_click(self):
         text, ok = QInputDialog.getText(self, 'New Account', 'Enter a name for the new account (namespace):')
         if ok and text.strip():
-            self.login_requested.emit(text.strip())
+            namespace = text.strip()
+            # We need the current settings for proxy, etc.
+            current_settings = self.get_current_settings()
+            dialog = LoginDialog(self.tdl_path, namespace, current_settings, self)
+            if dialog.exec():
+                # Success, refresh the account list
+                self._populate_accounts()
+                self.account_combo.setCurrentText(namespace)
+
+    def _handle_desktop_login_click(self):
+        """Handles the logic for logging in from a desktop client."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Telegram Executable",
+            "C:\\",
+            "Telegram Desktop (Telegram.exe)"
+        )
+
+        if not path:
+            return
+
+        passcode, ok = QInputDialog.getText(
+            self,
+            "Passcode",
+            "Enter your local passcode if you have one:",
+            QLineEdit.EchoMode.Password
+        )
+
+        if ok:
+            # We need to get the namespace first
+            namespace, ok_ns = QInputDialog.getText(self, 'New Account', 'Enter a name for this account (namespace):')
+            if ok_ns and namespace.strip():
+                self.desktop_login_requested.emit(path, passcode)
+                # We don't know if it succeeded yet, so we don't refresh here.
+                # The main window should inform us.
+                QMessageBox.information(self, "Login Started", "The application will now attempt to log in using the selected client. See the log for details.")
+            else:
+                QMessageBox.warning(self, "Input Error", "A namespace is required to save the account.")
+
+    def _handle_qr_login_click(self):
+        text, ok = QInputDialog.getText(self, 'New Account', 'Enter a name for the new account (namespace):')
+        if ok and text.strip():
+            namespace = text.strip()
+            current_settings = self.get_current_settings()
+            dialog = QRCodeDialog(self.tdl_path, namespace, current_settings, self)
+            if dialog.exec():
+                self._populate_accounts()
+                self.account_combo.setCurrentText(namespace)
 
     def _get_storage_path(self):
-        """Gets the configured storage path, or the default."""
         path = self.settings.get('storage_path', '').strip()
         if path:
             return path
         return os.path.expanduser('~/.tdl/data')
 
     def _populate_accounts(self):
-        """Scans the storage directory to find account namespaces."""
         self.account_combo.clear()
         storage_path = self._get_storage_path()
         driver = self.settings.get('storage_driver', 'bolt')
-
         accounts = {"default"}
-
         if driver == 'bolt' and os.path.isdir(storage_path):
             try:
                 for f_name in os.listdir(storage_path):
                     f_path = os.path.join(storage_path, f_name)
-                    # Account namespaces are files with no extension
                     if os.path.isfile(f_path) and '.' not in f_name:
                         accounts.add(f_name)
             except FileNotFoundError:
-                pass # Directory doesn't exist yet, that's fine
-
+                pass
         self.account_combo.addItems(sorted(list(accounts)))
 
     def load_settings(self):
@@ -225,33 +273,33 @@ class SettingsDialog(QDialog):
         self.storage_driver_combo.setCurrentText(self.settings.get('storage_driver', 'bolt'))
         self.timeout_spinbox.setValue(self.settings.get('command_timeout', 300))
         self.ntp_server_input.setText(self.settings.get('ntp_server', ''))
-
-        # Parse reconnect_timeout, e.g., "5m"
         reconnect_timeout = self.settings.get('reconnect_timeout', '5m')
         timeout_val = 0
         timeout_unit = 'm'
         if reconnect_timeout and reconnect_timeout[:-1].isdigit():
             timeout_val = int(reconnect_timeout[:-1])
             timeout_unit = reconnect_timeout[-1]
-
         self.reconnect_timeout_spinbox.setValue(timeout_val)
         self.reconnect_timeout_unit_combo.setCurrentText(timeout_unit)
-
         self._populate_accounts()
         self.account_combo.setCurrentText(self.settings.get('namespace', 'default'))
 
-    def accept(self):
-        self.settings['debug_mode'] = self.debug_mode_checkbox.isChecked()
-        self.settings['storage_path'] = self.storage_path_input.text()
-        self.settings['auto_proxy'] = self.auto_proxy_checkbox.isChecked()
-        self.settings['manual_proxy'] = self.manual_proxy_input.text()
-        self.settings['storage_driver'] = self.storage_driver_combo.currentText()
-        self.settings['namespace'] = self.account_combo.currentText()
-        self.settings['command_timeout'] = self.timeout_spinbox.value()
-        self.settings['ntp_server'] = self.ntp_server_input.text()
-
+    def get_current_settings(self):
+        """Returns a dictionary of the current settings in the dialog."""
+        current = {}
+        current['debug_mode'] = self.debug_mode_checkbox.isChecked()
+        current['storage_path'] = self.storage_path_input.text()
+        current['auto_proxy'] = self.auto_proxy_checkbox.isChecked()
+        current['manual_proxy'] = self.manual_proxy_input.text()
+        current['storage_driver'] = self.storage_driver_combo.currentText()
+        current['namespace'] = self.account_combo.currentText()
+        current['command_timeout'] = self.timeout_spinbox.value()
+        current['ntp_server'] = self.ntp_server_input.text()
         timeout_val = self.reconnect_timeout_spinbox.value()
         timeout_unit = self.reconnect_timeout_unit_combo.currentText()
-        self.settings['reconnect_timeout'] = f"{timeout_val}{timeout_unit}"
+        current['reconnect_timeout'] = f"{timeout_val}{timeout_unit}"
+        return current
 
+    def accept(self):
+        self.settings = self.get_current_settings()
         super().accept()
