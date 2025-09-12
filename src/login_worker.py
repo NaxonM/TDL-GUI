@@ -68,8 +68,8 @@ class LoginWorker(QThread):
     def _read_stdout_for_code(self):
         buffer = ""
         # Regex to find a question mark and capture the prompt text.
-        # It is anchored to the end of the string to ensure we have the full prompt.
-        prompt_regex = re.compile(r"\? (.*):$")
+        # It is NOT anchored to the end of the string, to allow for trailing text.
+        prompt_regex = re.compile(r"\? (.*):")
 
         for char in iter(lambda: self.process.stdout.read(1), ''):
             if self._is_stopped:
