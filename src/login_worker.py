@@ -3,8 +3,11 @@ import threading
 import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
+import re
 class LoginWorker(QThread):
-    prompt_detected = pyqtSignal(str)
+    warning_detected = pyqtSignal(str)
+    status_update = pyqtSignal(str)
+    prompt_for_input = pyqtSignal(str, str)
     qr_code_ready = pyqtSignal(str)
     login_success = pyqtSignal()
     login_failed = pyqtSignal(str)
@@ -28,7 +31,11 @@ class LoginWorker(QThread):
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                encoding='utf-8',
+                errors='ignore'
             )
 
             if self.mode == 'code':
@@ -60,30 +67,61 @@ class LoginWorker(QThread):
 
     def _read_stdout_for_code(self):
         buffer = ""
-        for byte_char in iter(lambda: self.process.stdout.read(1), b''):
-            if self._is_stopped: break
+        # Regex to find a question mark and capture the text of the prompt.
+        prompt_regex = re.compile(r"\? (.*):")
 
-            try:
-                char = byte_char.decode('utf-8')
-                buffer += char
-            except UnicodeDecodeError:
-                continue
+        for char in iter(lambda: self.process.stdout.read(1), ''):
+            if self._is_stopped:
+                break
+            buffer += char
 
-            if char == ':':
-                prompt_line = buffer.strip()
-                if '?' in prompt_line:
-                    self.log_message.emit(f"[PROMPT DETECTED] {prompt_line}")
-                    self.prompt_detected.emit(prompt_line)
+            # Process buffer when we hit a colon (prompts) or newline (other messages)
+            if char == ':' or char == '\n':
+                line = buffer.strip()
+                if not line:
                     buffer = ""
+                    continue
 
-            elif char == '\n':
-                line_stripped = buffer.strip()
-                if line_stripped:
-                    self.log_message.emit(f"[STDOUT] {line_stripped}")
-                    if 'Login successfully!' in line_stripped:
-                        self.login_success.emit()
-                        return
-                buffer = ""
+                self.log_message.emit(f"[STDOUT] {line}")
+
+                # --- Check for Prompts ---
+                prompt_match = prompt_regex.search(line)
+                if prompt_match:
+                    prompt_text = prompt_match.group(1).strip()
+                    prompt_type = 'unknown'
+                    if 'phone number' in prompt_text.lower():
+                        prompt_type = 'phone'
+                    elif 'code' in prompt_text.lower():
+                        prompt_type = 'code'
+                    elif 'password' in prompt_text.lower():
+                        prompt_type = 'password'
+
+                    self.prompt_for_input.emit(prompt_type, prompt_text)
+
+                    # Check for a warning on the same line, before the prompt
+                    if 'warn:' in line.lower():
+                        # Extract just the warning part
+                        warn_text = line.split('?')[0].strip()
+                        self.warning_detected.emit(warn_text)
+
+                    buffer = ""
+                    continue
+
+                # --- Check for other messages ---
+                if 'login successfully!' in line.lower():
+                    self.login_success.emit()
+                    buffer = ""
+                    return  # End of process
+
+                if 'sending code...' in line.lower():
+                    self.status_update.emit('Sending verification code...')
+                    buffer = ""
+                    continue
+
+                # If it's just a line break and we haven't matched anything else,
+                # we can probably just clear the buffer and wait for more content.
+                if char == '\n':
+                    buffer = ""
 
     def _read_stdout_for_qr(self):
         buffer = ""
@@ -91,12 +129,11 @@ class LoginWorker(QThread):
 
         while not self._is_stopped:
             try:
-                byte_char = self.process.stdout.read(1)
-                if not byte_char:
+                char = self.process.stdout.read(1)
+                if not char:
                     break # Pipe closed
 
                 last_char_time = time.time()
-                char = byte_char.decode('utf-8', errors='ignore')
                 buffer += char
 
                 # Assume the QR code is complete if we see a newline and "Scan QR"
@@ -114,9 +151,9 @@ class LoginWorker(QThread):
 
     def _read_stderr(self):
         error_lines = []
-        for line_bytes in iter(self.process.stderr.readline, b''):
+        for line in iter(self.process.stderr.readline, ''):
             if self._is_stopped: break
-            line = line_bytes.decode('utf-8', errors='ignore').strip()
+            line = line.strip()
             if line:
                 self.log_message.emit(f"[STDERR] {line}")
                 error_lines.append(line)
@@ -126,7 +163,7 @@ class LoginWorker(QThread):
     def send_input(self, text):
         if self.process and self.process.poll() is None:
             try:
-                self.process.stdin.write(text.encode('utf-8') + b'\n')
+                self.process.stdin.write(text + '\n')
                 self.process.stdin.flush()
                 self.log_message.emit(f"[STDIN] Wrote: {text}")
             except Exception as e:
