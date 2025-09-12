@@ -90,7 +90,7 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         """Initializes the main UI components."""
         self.setWindowTitle("tdl GUI")
-        self.setGeometry(100, 100, 850, 700)
+        self.setGeometry(100, 100, 750, 650)
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -126,9 +126,10 @@ class MainWindow(QMainWindow):
     def _create_download_tab(self):
         """Creates the main 'Download' tab widget."""
         widget = QWidget()
-        main_layout = QVBoxLayout(widget)
-        main_layout.setSpacing(15)
+        grid_layout = QGridLayout(widget)
+        grid_layout.setSpacing(10)
 
+        # Create widgets
         source_group = self._create_download_source_group()
         dest_group = self._create_download_destination_group()
         self.advanced_group = self._create_download_advanced_group()
@@ -146,11 +147,15 @@ class MainWindow(QMainWindow):
         action_button_layout.addWidget(self.resume_download_button)
         action_button_layout.addStretch()
 
-        main_layout.addWidget(source_group)
-        main_layout.addWidget(dest_group)
-        main_layout.addWidget(self.advanced_group)
-        main_layout.addLayout(action_button_layout)
-        main_layout.addWidget(progress_group)
+        # Arrange widgets on the grid
+        grid_layout.addWidget(source_group, 0, 0, 1, 2)
+        grid_layout.addWidget(dest_group, 1, 0)
+        grid_layout.addWidget(self.advanced_group, 1, 1)
+        grid_layout.addLayout(action_button_layout, 2, 0, 1, 2)
+        grid_layout.addWidget(progress_group, 3, 0, 1, 2)
+
+        grid_layout.setColumnStretch(0, 1)
+        grid_layout.setColumnStretch(1, 1)
 
         self.download_controls.extend([
             self.source_input, self.load_from_file_button, self.clear_source_button,
@@ -329,7 +334,7 @@ class MainWindow(QMainWindow):
     def _create_export_tab(self):
         widget = QWidget()
         main_layout = QVBoxLayout(widget)
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(10)
 
         source_group = self._create_export_source_group()
         options_group = self._create_export_options_group()
@@ -340,14 +345,15 @@ class MainWindow(QMainWindow):
 
         self.export_advanced_group = self._create_export_advanced_group()
 
-        main_layout.addWidget(source_group)
-        main_layout.addWidget(options_group)
-        main_layout.addWidget(content_group)
-        main_layout.addWidget(self.export_advanced_group)
         action_button_layout = QHBoxLayout()
         action_button_layout.addStretch()
         action_button_layout.addWidget(self.run_export_button)
         action_button_layout.addStretch()
+
+        main_layout.addWidget(source_group)
+        main_layout.addWidget(options_group)
+        main_layout.addWidget(content_group)
+        main_layout.addWidget(self.export_advanced_group)
         main_layout.addLayout(action_button_layout)
         main_layout.addStretch()
 
