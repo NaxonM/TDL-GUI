@@ -32,6 +32,12 @@ class LoginWorker(QThread):
         self.pty_process = None
         self._is_stopped = False
 
+    def _strip_ansi(self, text):
+        """Removes ANSI escape codes from a string."""
+        # This regex covers most common cases of ANSI escape sequences
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        return ansi_escape.sub('', text)
+
     def run(self):
         # On non-Windows platforms, pywinpty is not available.
         # We must fall back to the old subprocess logic which is known to fail,
@@ -77,25 +83,24 @@ class LoginWorker(QThread):
             self.login_failed.emit(f"Failed to start login process with PTY: {e}")
 
     def _read_pty_output(self):
-        """Reads the combined stdout/stderr from the PTY."""
+        """Reads and processes the combined stdout/stderr from the PTY."""
         buffer = ""
         prompt_regex = re.compile(r"\? (.*):")
 
         while self.pty_process.isalive() and not self._is_stopped:
             try:
-                # The read timeout is not supported by the new API.
-                # This will now block until a character is received.
-                # The stop flag is checked on each loop iteration.
                 char = self.pty_process.read(1)
             except EOFError:
                 break # Process exited
 
             buffer += char
-            # Using strip() is important because PTY output can have extra whitespace
-            line = buffer.strip()
+            # Clean the buffer to remove ANSI codes before processing
+            clean_buffer = self._strip_ansi(buffer)
+            line = clean_buffer.strip()
+
             self.log_message.emit(f"[PTY] {repr(char)} -> Buffer: '{line}'")
 
-            # The prompt pattern check remains the same
+            # Check for prompts in the cleaned buffer
             prompt_match = prompt_regex.search(line)
             if prompt_match:
                 self.log_message.emit(f"[PTY-MATCH] Prompt matched on line: '{line}'")
@@ -109,22 +114,22 @@ class LoginWorker(QThread):
                 elif 'password' in prompt_text.lower():
                     prompt_type = 'password'
 
-                self.prompt_for_input.emit(prompt_type, prompt_text)
+                # The warning might also be in the line, extract it
                 if 'warn:' in line.lower():
                     self.warning_detected.emit(line.split('?')[0].strip())
 
+                self.prompt_for_input.emit(prompt_type, prompt_text)
                 buffer = "" # Clear buffer after successful match
                 continue
 
-            # Check for other messages on newlines
+            # Check for other messages on newlines in the raw buffer
             if '\n' in buffer:
-                # Process lines separated by newline
                 parts = buffer.split('\n')
-                # The last part might be incomplete, so keep it in the buffer
-                buffer = parts[-1]
+                buffer = parts[-1] # Keep the last, possibly incomplete part
 
                 for part in parts[:-1]:
-                    line_to_check = part.strip()
+                    clean_part = self._strip_ansi(part)
+                    line_to_check = clean_part.strip()
                     if not line_to_check:
                         continue
 
@@ -132,7 +137,6 @@ class LoginWorker(QThread):
                     if 'login successfully!' in line_to_check.lower():
                         self.login_success.emit()
                         return # End thread
-
                     if 'sending code...' in line_to_check.lower():
                         self.status_update.emit('Sending verification code...')
 
@@ -143,16 +147,18 @@ class LoginWorker(QThread):
             try:
                 char = self.pty_process.read(1)
                 buffer += char
-                if "Scan QR code" in buffer:
-                    self.qr_code_ready.emit(buffer)
+                clean_buffer = self._strip_ansi(buffer)
+                if "Scan QR code" in clean_buffer:
+                    # Emit the cleaned buffer, which should contain the ASCII QR code
+                    self.qr_code_ready.emit(clean_buffer)
             except EOFError:
                 break
 
     def send_input(self, text):
         if self.pty_process and self.pty_process.isalive():
             try:
-                # PTY expects bytes, so we encode the string
-                self.pty_process.write(text.encode('utf-8') + b'\r\n')
+                # The new PTY API expects a string, not bytes.
+                self.pty_process.write(text + '\r\n')
                 self.log_message.emit(f"[PTY-WRITE] Wrote: {text}")
             except Exception as e:
                 self.login_failed.emit(f"Failed to write to PTY process: {e}")
