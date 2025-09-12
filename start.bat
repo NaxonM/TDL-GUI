@@ -45,37 +45,11 @@ if %errorlevel% neq 0 (
 ECHO Dependencies are up to date.
 ECHO.
 
-REM --- Step 3: Print Diagnostic Information ---
-ECHO =================================
-ECHO  DIAGNOSTIC INFORMATION
-ECHO =================================
+REM --- Step 3: Launch the application ---
+ECHO Launching application...
 ECHO.
-ECHO [DIAG] The system PATH is:
-ECHO %PATH%
+python src\main.py
 ECHO.
-ECHO [DIAG] The 'python' command resolves to:
-where python
-ECHO.
-ECHO [DIAG] The 'pip' command resolves to:
-where pip
-ECHO.
-ECHO [DIAG] The packages installed in this environment are:
-pip list
-ECHO.
-ECHO [DIAG] The Python interpreter's search path (sys.path) is:
-python -c "import sys, pprint; pprint.pprint(sys.path)"
-ECHO.
-ECHO =================================
-ECHO  End of Diagnostic Information
-ECHO =================================
-ECHO.
-
-REM --- Step 4: Launch the application (Commented out for diagnostics) ---
-REM ECHO Launching application...
-REM ECHO.
-REM python src\main.py
-REM ECHO.
-REM ECHO Application closed.
-
+ECHO Application closed.
 pause
 exit /b
