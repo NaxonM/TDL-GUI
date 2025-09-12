@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local virtual environment
+venv/
+
+# Application artifacts
+bin/
+tdl_state.json
+tdl_last_command.json

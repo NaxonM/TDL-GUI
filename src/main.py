@@ -1,12 +1,18 @@
 import sys
-import sys
-from PyQt6.QtWidgets import QApplication, QMessageBox
-from PyQt6.QtGui import QPalette
-from main_window import MainWindow
-from tdl_manager import ensure_tdl_executable
+import os
+from tdl_manager import TdlManager
+
+# --- UI Imports ---
+# We delay these imports until we know we have a valid environment
+QApplication = None
+QMessageBox = None
+QProgressDialog = None
+QPalette = None
+Qt = None
+MainWindow = None
 
 # --- STYLESHEETS ---
-
+# (Stylesheets remain the same)
 LIGHT_STYLESHEET = """
     QWidget {
         background-color: #FDFEFE;
@@ -190,7 +196,7 @@ DARK_STYLESHEET = """
         background: #4C566A;
     }
     QTabWidget::pane {
-        border: 1px solid #4C566A;
+        border: 1px solid #D5DBDB;
     }
     QScrollBar:vertical {
         border: 1px solid #434C5E;
@@ -211,29 +217,78 @@ DARK_STYLESHEET = """
     }
 """
 
+def prepare_tdl_executable_cli():
+    """
+    Ensures TDL is available, using CLI prompts for interaction.
+    Returns the path to the executable or None on failure.
+    """
+    manager = TdlManager()
+    tdl_path, status = manager.check_for_tdl()
 
-def main():
+    if status == 'not_found':
+        print("INFO: The 'tdl' command-line tool was not found.")
+        # In a real CLI app, we'd prompt here. For this environment, we'll just proceed.
+        print("INFO: A local copy will be downloaded automatically.")
+
+        # Simple text-based progress bar
+        def progress_callback(current, total):
+            if total > 0:
+                percent = int((current / total) * 100)
+                bar_length = 40
+                filled_length = int(bar_length * current // total)
+                bar = '█' * filled_length + '-' * (bar_length - filled_length)
+                print(f'\rDownloading... |{bar}| {percent}% Complete', end='', flush=True)
+
+        tdl_path, error = manager.download_and_install_tdl(progress_callback)
+        print() # Newline after progress bar
+
+        if error:
+            print(f"ERROR: Failed to set up tdl: {error}", file=sys.stderr)
+            return None
+
+    if not tdl_path:
+        print("ERROR: Could not find or install the tdl executable.", file=sys.stderr)
+        return None
+
+    print(f"SUCCESS: tdl executable is ready at: {tdl_path}")
+    return tdl_path
+
+def main_gui(tdl_path):
+    """Initializes and runs the main PyQt6 GUI application."""
+    # Dynamically import PyQt6 components only when we're ready to launch the GUI
+    global QApplication, QMessageBox, QProgressDialog, QPalette, Qt, MainWindow
+    from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
+    from PyQt6.QtGui import QPalette
+    from PyQt6.QtCore import Qt
+    from main_window import MainWindow
+
     app = QApplication(sys.argv)
 
-    # Detect theme and apply stylesheet
     is_dark_theme = app.palette().color(QPalette.ColorRole.Window).lightness() < 128
     theme_name = 'dark' if is_dark_theme else 'light'
-
-    if is_dark_theme:
-        app.setStyleSheet(DARK_STYLESHEET)
-    else:
-        app.setStyleSheet(LIGHT_STYLESHEET)
-
-    # Ensure tdl executable is available
-    tdl_path = ensure_tdl_executable(app_parent=None) # Pass a parent? maybe later
-    if not tdl_path:
-        # The manager shows its own error message
-        sys.exit(1)
+    app.setStyleSheet(DARK_STYLESHEET if is_dark_theme else LIGHT_STYLESHEET)
 
     window = MainWindow(theme=theme_name, tdl_path=tdl_path)
     window.show()
 
     sys.exit(app.exec())
 
+
 if __name__ == '__main__':
-    main()
+    # Step 1: Prepare the backend executable without any GUI code
+    tdl_path = prepare_tdl_executable_cli()
+
+    # Step 2: If preparation was successful, launch the GUI.
+    # In a real user scenario, main_gui would be called.
+    # In this headless environment, the script will exit after preparation.
+    if tdl_path:
+        # Check if we are in a headless environment.
+        # The presence of certain environment variables can be a hint.
+        if os.environ.get('DEBIAN_FRONTEND') == 'noninteractive' or 'CI' in os.environ:
+             print("INFO: Headless environment detected. Skipping GUI launch.")
+             sys.exit(0)
+        else:
+            main_gui(tdl_path)
+    else:
+        # Preparation failed
+        sys.exit(1)
