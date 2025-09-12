@@ -67,47 +67,49 @@ class LoginWorker(QThread):
 
     def _read_stdout_for_code(self):
         buffer = ""
-        # Regex to find a question mark and capture the text of the prompt.
-        prompt_regex = re.compile(r"\? (.*):")
+        # Regex to find a question mark and capture the prompt text.
+        # It is anchored to the end of the string to ensure we have the full prompt.
+        prompt_regex = re.compile(r"\? (.*):$")
 
         for char in iter(lambda: self.process.stdout.read(1), ''):
             if self._is_stopped:
                 break
             buffer += char
+            line = buffer.strip()
 
-            # Process buffer when we hit a colon (prompts) or newline (other messages)
-            if char == ':' or char == '\n':
-                line = buffer.strip()
+            # --- Check for Prompts ---
+            # A prompt can appear without a newline, so we check for a match continuously.
+            prompt_match = prompt_regex.search(line)
+            if prompt_match:
+                self.log_message.emit(f"[STDOUT] {line}")
+
+                prompt_text = prompt_match.group(1).strip()
+                prompt_type = 'unknown'
+                if 'phone number' in prompt_text.lower():
+                    prompt_type = 'phone'
+                elif 'code' in prompt_text.lower():
+                    prompt_type = 'code'
+                elif 'password' in prompt_text.lower():
+                    prompt_type = 'password'
+
+                self.prompt_for_input.emit(prompt_type, prompt_text)
+
+                # Check for a warning on the same line, before the prompt
+                if 'warn:' in line.lower():
+                    warn_text = line.split('?')[0].strip()
+                    self.warning_detected.emit(warn_text)
+
+                buffer = ""  # Clear buffer after processing a prompt
+                continue
+
+            # --- Check for other messages (on newlines) ---
+            if char == '\n':
                 if not line:
                     buffer = ""
                     continue
 
                 self.log_message.emit(f"[STDOUT] {line}")
 
-                # --- Check for Prompts ---
-                prompt_match = prompt_regex.search(line)
-                if prompt_match:
-                    prompt_text = prompt_match.group(1).strip()
-                    prompt_type = 'unknown'
-                    if 'phone number' in prompt_text.lower():
-                        prompt_type = 'phone'
-                    elif 'code' in prompt_text.lower():
-                        prompt_type = 'code'
-                    elif 'password' in prompt_text.lower():
-                        prompt_type = 'password'
-
-                    self.prompt_for_input.emit(prompt_type, prompt_text)
-
-                    # Check for a warning on the same line, before the prompt
-                    if 'warn:' in line.lower():
-                        # Extract just the warning part
-                        warn_text = line.split('?')[0].strip()
-                        self.warning_detected.emit(warn_text)
-
-                    buffer = ""
-                    continue
-
-                # --- Check for other messages ---
                 if 'login successfully!' in line.lower():
                     self.login_success.emit()
                     buffer = ""
@@ -118,10 +120,9 @@ class LoginWorker(QThread):
                     buffer = ""
                     continue
 
-                # If it's just a line break and we haven't matched anything else,
-                # we can probably just clear the buffer and wait for more content.
-                if char == '\n':
-                    buffer = ""
+                # If it's a line of text we don't recognize,
+                # clear the buffer and move on.
+                buffer = ""
 
     def _read_stdout_for_qr(self):
         buffer = ""
