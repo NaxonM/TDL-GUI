@@ -7,6 +7,7 @@ import json
 import zipfile
 import tarfile
 import shutil
+import subprocess
 
 # --- Configuration ---
 GITHUB_API_URL = "https://api.github.com/repos/iyear/tdl/releases/latest"
@@ -136,6 +137,66 @@ class TdlManager:
         Main orchestration method to download, extract, and install tdl.
         Returns (path, None) on success, (None, error_message) on failure.
         """
+        # On Windows, use the official installer script for robustness.
+        # We will modify it on the fly to ensure a portable installation.
+        if platform.system() == "Windows":
+            try:
+                # 1. Download the installer script
+                script_url = "https://docs.iyear.me/tdl/install.ps1"
+                with urllib.request.urlopen(script_url) as response:
+                    if response.status != 200:
+                        return None, f"Failed to download installer script (status: {response.status})"
+                    original_script = response.read().decode('utf-8')
+
+                # 2. Modify the script for portable use
+                # Use a raw string and escape backslashes for the Windows path
+                portable_path = self.bin_dir.replace('\\', '\\\\')
+                modified_script = original_script.replace(
+                    '$Location = "$Env:SystemDrive\\tdl"',
+                    f'$Location = "{portable_path}"'
+                )
+
+                # Remove the admin check and PATH modification logic
+                modified_script = modified_script.replace(
+                    'if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator"))',
+                    'if ($false)'
+                )
+                modified_script = modified_script.replace(
+                    '$PathEnv = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)',
+                    '# PATH modification disabled for portable install'
+                )
+                modified_script = modified_script.replace(
+                    'if (-not($PathEnv -like "*$Location*"))',
+                    'if ($false)'
+                )
+
+                # 3. Save the modified script to a temporary file
+                temp_script_path = os.path.join(self.bin_dir, 'install_tdl.ps1')
+                with open(temp_script_path, 'w', encoding='utf-8') as f:
+                    f.write(modified_script)
+
+                # 4. Execute the script
+                # We use -ExecutionPolicy Bypass to ensure the script can run.
+                command = ['powershell', '-ExecutionPolicy', 'Bypass', '-File', temp_script_path]
+                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                stdout, stderr = process.communicate()
+
+                if process.returncode != 0:
+                    return None, f"Installer script failed:\n{stdout}\n{stderr}"
+
+                # 5. Clean up the temporary script
+                os.remove(temp_script_path)
+
+                # 6. Verify installation
+                if os.path.exists(self.local_tdl_path):
+                    return self.local_tdl_path, None
+                else:
+                    return None, f"tdl.exe not found at the expected path after running installer.\n{stdout}\n{stderr}"
+
+            except Exception as e:
+                return None, f"An error occurred during the PowerShell install process: {e}"
+
+        # Fallback to the original method for non-Windows platforms
         platform_key, error = self.get_platform_key()
         if error:
             return None, error
@@ -144,7 +205,10 @@ class TdlManager:
         if error:
             return None, error
 
-        asset_name = ASSET_MAP[platform_key]
+        asset_name = ASSET_MAP.get(platform_key)
+        if not asset_name:
+            return None, f"Could not find a suitable download for your platform: {platform_key}"
+
         download_url = None
         for asset in release_info.get('assets', []):
             if asset['name'] == asset_name:

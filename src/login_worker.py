@@ -6,7 +6,13 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 # pywinpty is only available on Windows
 if sys.platform == "win32":
-    import pywinpty
+    try:
+        from winpty import PtyProcess
+        # Alias for backward compatibility in the rest of the file
+        pywinpty = PtyProcess
+    except ImportError:
+        PtyProcess = None
+        pywinpty = None
 
 class LoginWorker(QThread):
     warning_detected = pyqtSignal(str)
@@ -77,10 +83,10 @@ class LoginWorker(QThread):
 
         while self.pty_process.isalive() and not self._is_stopped:
             try:
-                # Read with a timeout to allow checking the stop flag
-                char = self.pty_process.read(1, 1000) # 1 char, 1s timeout
-                if not char:
-                    continue # Timeout, loop again
+                # The read timeout is not supported by the new API.
+                # This will now block until a character is received.
+                # The stop flag is checked on each loop iteration.
+                char = self.pty_process.read(1)
             except EOFError:
                 break # Process exited
 
@@ -135,9 +141,7 @@ class LoginWorker(QThread):
         buffer = ""
         while self.pty_process.isalive() and not self._is_stopped:
             try:
-                char = self.pty_process.read(1, 1000)
-                if not char:
-                    continue
+                char = self.pty_process.read(1)
                 buffer += char
                 if "Scan QR code" in buffer:
                     self.qr_code_ready.emit(buffer)
@@ -157,7 +161,7 @@ class LoginWorker(QThread):
         self._is_stopped = True
         if self.pty_process and self.pty_process.isalive():
             try:
-                self.pty_process.terminate(force=True)
+                self.pty_process.terminate()
                 self.log_message.emit("Login process terminated by user.")
             except Exception as e:
                 self.log_message.emit(f"Error terminating PTY process: {e}")
