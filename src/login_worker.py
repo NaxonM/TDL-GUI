@@ -1,5 +1,6 @@
 import subprocess
 import threading
+import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
 class LoginWorker(QThread):
@@ -21,18 +22,13 @@ class LoginWorker(QThread):
     def run(self):
         command = [self.tdl_path, 'login', '-T', self.mode, '--ns', self.namespace]
         if self.settings.get('debug_mode', False): command.append('--debug')
-        # A more robust implementation would also add proxy and storage args here.
 
         try:
             self.process = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                bufsize=1
+                stderr=subprocess.PIPE
             )
 
             if self.mode == 'code':
@@ -46,74 +42,91 @@ class LoginWorker(QThread):
             stderr_thread = threading.Thread(target=self._read_stderr)
             stdout_thread.start()
             stderr_thread.start()
+
+            return_code = self.process.wait()
+
             stdout_thread.join()
             stderr_thread.join()
-            self.process.wait()
 
-            if self.process.returncode != 0 and not self._is_stopped:
-                self.login_failed.emit(f"Login process finished with exit code {self.process.returncode}.")
+            if return_code == 0:
+                # On successful QR scan, the success message is the only thing we get
+                # after the process ends.
+                self.login_success.emit()
+            elif not self._is_stopped:
+                self.login_failed.emit(f"Login process finished with exit code {return_code}.")
 
         except Exception as e:
             self.login_failed.emit(f"Failed to start login process: {e}")
 
     def _read_stdout_for_code(self):
         buffer = ""
-        for char in iter(lambda: self.process.stdout.read(1), ''):
+        for byte_char in iter(lambda: self.process.stdout.read(1), b''):
             if self._is_stopped: break
-            buffer += char
 
-            # Prompts end with a colon and a space
-            if buffer.endswith(': '):
-                self.prompt_detected.emit(buffer.strip())
-                buffer = ""
+            try:
+                char = byte_char.decode('utf-8')
+                buffer += char
+            except UnicodeDecodeError:
+                continue
 
-            # Regular lines end with a newline
-            elif '\n' in buffer:
+            if char == ':':
+                prompt_line = buffer.strip()
+                if '?' in prompt_line:
+                    self.log_message.emit(f"[PROMPT DETECTED] {prompt_line}")
+                    self.prompt_detected.emit(prompt_line)
+                    buffer = ""
+
+            elif char == '\n':
                 line_stripped = buffer.strip()
                 if line_stripped:
                     self.log_message.emit(f"[STDOUT] {line_stripped}")
                     if 'Login successfully!' in line_stripped:
                         self.login_success.emit()
-                        return # Exit thread
+                        return
                 buffer = ""
 
     def _read_stdout_for_qr(self):
-        qr_lines = []
-        is_qr_section = False
-        for line in iter(self.process.stdout.readline, ''):
-            if self._is_stopped: break
+        buffer = ""
+        last_char_time = time.time()
 
-            line_stripped = line.strip()
-            self.log_message.emit(f"[STDOUT] {line_stripped}")
+        while not self._is_stopped:
+            try:
+                byte_char = self.process.stdout.read(1)
+                if not byte_char:
+                    break # Pipe closed
 
-            if "Scan QR code" in line_stripped:
-                is_qr_section = True
+                last_char_time = time.time()
+                char = byte_char.decode('utf-8', errors='ignore')
+                buffer += char
 
-            if is_qr_section:
-                qr_lines.append(line)
-                # A blank line after the QR art signals the end of it
-                if not line_stripped and len(qr_lines) > 5:
-                    self.qr_code_ready.emit("".join(qr_lines))
-                    is_qr_section = False
+                # Assume the QR code is complete if we see a newline and "Scan QR"
+                if char == '\n' and "Scan QR code" in buffer:
+                    self.qr_code_ready.emit(buffer)
+                    # Don't clear buffer, as more of the QR code might be coming
 
-            if 'Login successfully!' in line_stripped:
-                self.login_success.emit()
-                return
+            except:
+                break # Exit on error
+
+        # Final emit after loop finishes, in case there was no newline
+        if buffer:
+             self.qr_code_ready.emit(buffer)
+
 
     def _read_stderr(self):
         error_lines = []
-        for line in iter(self.process.stderr.readline, ''):
+        for line_bytes in iter(self.process.stderr.readline, b''):
             if self._is_stopped: break
-            line_stripped = line.strip()
-            self.log_message.emit(f"[STDERR] {line_stripped}")
-            error_lines.append(line_stripped)
+            line = line_bytes.decode('utf-8', errors='ignore').strip()
+            if line:
+                self.log_message.emit(f"[STDERR] {line}")
+                error_lines.append(line)
         if error_lines and not self._is_stopped:
             self.login_failed.emit("\n".join(error_lines))
 
     def send_input(self, text):
         if self.process and self.process.poll() is None:
             try:
-                self.process.stdin.write(text + '\n')
+                self.process.stdin.write(text.encode('utf-8') + b'\n')
                 self.process.stdin.flush()
                 self.log_message.emit(f"[STDIN] Wrote: {text}")
             except Exception as e:
