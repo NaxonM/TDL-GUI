@@ -228,9 +228,6 @@ class SettingsDialog(QDialog):
             namespace, ok_ns = QInputDialog.getText(self, 'New Account', 'Enter a name for this account (namespace):')
             if ok_ns and namespace.strip():
                 self.desktop_login_requested.emit(path, passcode)
-                # We don't know if it succeeded yet, so we don't refresh here.
-                # The main window should inform us.
-                QMessageBox.information(self, "Login Started", "The application will now attempt to log in using the selected client. See the log for details.")
             else:
                 QMessageBox.warning(self, "Input Error", "A namespace is required to save the account.")
 

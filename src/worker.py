@@ -206,3 +206,25 @@ class Worker(QThread):
                 self.logMessage.emit("Task terminated by user.")
             except Exception as e:
                 self.logMessage.emit(f"Error terminating process: {e}")
+
+
+class InitialSetupWorker(QThread):
+    """A dedicated worker for the initial download of the tdl executable."""
+    progress = pyqtSignal(int, int)
+    success = pyqtSignal(str)
+    failure = pyqtSignal(str)
+
+    def __init__(self, manager, parent=None):
+        super().__init__(parent)
+        self.manager = manager
+
+    def run(self):
+        def progress_callback(current, total):
+            self.progress.emit(current, total)
+
+        tdl_path, error = self.manager.download_and_install_tdl(progress_callback)
+
+        if error:
+            self.failure.emit(error)
+        else:
+            self.success.emit(tdl_path)
