@@ -3,7 +3,7 @@ import shutil
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout, QGroupBox,
     QComboBox, QLineEdit, QCheckBox, QPushButton, QHBoxLayout, QDialogButtonBox,
-    QFileDialog, QInputDialog, QMessageBox, QSpinBox
+    QFileDialog, QInputDialog, QMessageBox, QSpinBox, QLabel
 )
 from PyQt6.QtCore import QDir, pyqtSignal
 from login_dialog import LoginDialog
@@ -41,10 +41,26 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         account_group = QGroupBox("Account Management")
-        form_layout = QFormLayout()
+        account_layout = QHBoxLayout()
+
         self.account_combo = QComboBox()
-        form_layout.addRow("Active Account:", self.account_combo)
-        account_group.setLayout(form_layout)
+        self.account_combo.setToolTip("Select the active account (namespace).")
+
+        self.rename_button = QPushButton("Rename")
+        self.rename_button.setToolTip("Rename the selected account.")
+        self.rename_button.clicked.connect(self._rename_account)
+
+        self.remove_button = QPushButton("Remove")
+        self.remove_button.setToolTip("Remove the selected account.")
+        self.remove_button.clicked.connect(self._remove_account)
+        self.account_combo.currentTextChanged.connect(self._update_account_buttons)
+
+        account_layout.addWidget(QLabel("Active Account:"))
+        account_layout.addWidget(self.account_combo, 1)
+        account_layout.addWidget(self.rename_button)
+        account_layout.addWidget(self.remove_button)
+
+        account_group.setLayout(account_layout)
         layout.addWidget(account_group)
 
         login_group = QGroupBox("Login Methods")
@@ -187,10 +203,78 @@ class SettingsDialog(QDialog):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to delete directory: {e}")
 
+    def _update_account_buttons(self, text):
+        """Enable/disable account management buttons based on the selected account."""
+        is_default = (text == 'default')
+        self.rename_button.setEnabled(not is_default)
+        self.remove_button.setEnabled(not is_default)
+
     def _browse_storage_path(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Storage Directory", QDir.homePath())
         if directory:
             self.storage_path_input.setText(directory)
+
+    def _rename_account(self):
+        current_name = self.account_combo.currentText()
+        if not current_name or current_name == 'default':
+            QMessageBox.warning(self, "Rename Not Allowed", "The 'default' account cannot be renamed.")
+            return
+
+        new_name, ok = QInputDialog.getText(self, "Rename Account", f"Enter a new name for '{current_name}':", text=current_name)
+        if not ok or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+        if new_name == current_name:
+            return
+
+        existing_accounts = [self.account_combo.itemText(i) for i in range(self.account_combo.count())]
+        if new_name in existing_accounts:
+            QMessageBox.warning(self, "Name Exists", f"An account named '{new_name}' already exists.")
+            return
+
+        storage_path = self._get_storage_path()
+        old_file = os.path.join(storage_path, current_name)
+        new_file = os.path.join(storage_path, new_name)
+
+        try:
+            if os.path.exists(old_file):
+                os.rename(old_file, new_file)
+                QMessageBox.information(self, "Success", f"Account '{current_name}' has been renamed to '{new_name}'.")
+                self._populate_accounts()
+                self.account_combo.setCurrentText(new_name)
+            else:
+                QMessageBox.critical(self, "Error", f"Could not find the data file for account '{current_name}'.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to rename account: {e}")
+
+    def _remove_account(self):
+        current_name = self.account_combo.currentText()
+        if not current_name or current_name == 'default':
+            QMessageBox.warning(self, "Remove Not Allowed", "The 'default' account cannot be removed.")
+            return
+
+        reply = QMessageBox.warning(
+            self, "Confirm Deletion",
+            f"Are you sure you want to permanently delete the account '{current_name}'?\n\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        storage_path = self._get_storage_path()
+        file_to_delete = os.path.join(storage_path, current_name)
+
+        try:
+            if os.path.exists(file_to_delete):
+                os.remove(file_to_delete)
+                QMessageBox.information(self, "Success", f"Account '{current_name}' has been deleted.")
+                self._populate_accounts()
+            else:
+                QMessageBox.critical(self, "Error", f"Could not find the data file for account '{current_name}'.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to delete account: {e}")
 
     def _handle_code_login_click(self):
         text, ok = QInputDialog.getText(self, 'New Account', 'Enter a name for the new account (namespace):')

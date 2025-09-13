@@ -1,8 +1,10 @@
 import sys
+import sys
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QDialogButtonBox, QMessageBox
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, QRegularExpression
+from PyQt6.QtGui import QRegularExpressionValidator
 from login_worker import LoginWorker
 
 class LoginDialog(QDialog):
@@ -14,6 +16,10 @@ class LoginDialog(QDialog):
 
         self.setWindowTitle(f"Interactive Login for '{namespace}'")
         self.setMinimumWidth(450)
+
+        # --- Validators ---
+        self.phone_validator = QRegularExpressionValidator(QRegularExpression(r"\+?\d+"))
+        self.code_validator = QRegularExpressionValidator(QRegularExpression(r"\d+"))
 
         layout = QVBoxLayout(self)
 
@@ -38,8 +44,13 @@ class LoginDialog(QDialog):
         self.submit_button = QPushButton("Submit")
         self.submit_button.clicked.connect(self._on_submit)
         self.submit_button.hide()
+        self.submit_button.setDefault(True)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        # Prevent the cancel button from becoming the default
+        cancel_button = self.button_box.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_button:
+            cancel_button.setAutoDefault(False)
         self.button_box.rejected.connect(self.reject)
 
         layout.addWidget(self.warning_label)
@@ -79,7 +90,6 @@ class LoginDialog(QDialog):
         self.prompt_label.setText(prompt_text)
         self.prompt_label.show()
 
-        # Clear status and show input fields
         self.status_label.hide()
         self.input_line_edit.show()
         self.submit_button.show()
@@ -87,15 +97,19 @@ class LoginDialog(QDialog):
 
         if prompt_type == 'password':
             self.input_line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            self.input_line_edit.setValidator(None)
         else:
             self.input_line_edit.setEchoMode(QLineEdit.EchoMode.Normal)
 
         if prompt_type == 'phone':
             self.input_line_edit.setPlaceholderText("e.g. +12223334444")
+            self.input_line_edit.setValidator(self.phone_validator)
         elif prompt_type == 'code':
             self.input_line_edit.setPlaceholderText("e.g. 12345")
-        else:
+            self.input_line_edit.setValidator(self.code_validator)
+        else: # Default case, e.g. 2FA password
             self.input_line_edit.setPlaceholderText("Enter information here")
+            self.input_line_edit.setValidator(None)
 
     def _on_login_success(self):
         """Handles the successful login signal."""
@@ -118,7 +132,8 @@ class LoginDialog(QDialog):
     def _on_submit(self):
         """Sends the user's input to the worker."""
         user_input = self.input_line_edit.text()
-        if not user_input:
+        if not user_input.strip():
+            QMessageBox.warning(self, "Input Error", "The input field cannot be empty.")
             return
 
         self.worker.send_input(user_input)

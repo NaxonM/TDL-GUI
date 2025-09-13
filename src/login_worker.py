@@ -31,6 +31,7 @@ class LoginWorker(QThread):
         self.mode = mode
         self.pty_process = None
         self._is_stopped = False
+        self._login_success_emitted = False
 
     def _strip_ansi(self, text):
         """Removes ANSI escape codes from a string."""
@@ -73,10 +74,11 @@ class LoginWorker(QThread):
             if self.pty_process.isalive():
                 self.pty_process.wait()
 
-            # Check exit status
-            if self.pty_process.exitstatus == 0:
+            # Check exit status, but only if success hasn't been emitted from the output reader
+            if self.pty_process.exitstatus == 0 and not self._login_success_emitted:
                 self.login_success.emit()
-            elif not self._is_stopped:
+                self._login_success_emitted = True
+            elif not self._is_stopped and self.pty_process.exitstatus != 0:
                 self.login_failed.emit(f"Login process finished with exit code {self.pty_process.exitstatus}.")
 
         except Exception as e:
@@ -135,7 +137,9 @@ class LoginWorker(QThread):
 
                     self.log_message.emit(f"[PTY-LINE] {line_to_check}")
                     if 'login successfully!' in line_to_check.lower():
-                        self.login_success.emit()
+                        if not self._login_success_emitted:
+                            self.login_success.emit()
+                            self._login_success_emitted = True
                         return # End thread
                     if 'sending code...' in line_to_check.lower():
                         self.status_update.emit('Sending verification code...')
