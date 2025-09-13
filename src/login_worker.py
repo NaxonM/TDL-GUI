@@ -145,16 +145,17 @@ class LoginWorker(QThread):
                         self.status_update.emit('Sending verification code...')
 
     def _read_pty_output_for_qr(self):
-        # A simplified reader for QR code mode
+        # A simplified reader for QR code mode.
+        # We do NOT strip ANSI codes here, as they are used to render the QR code.
         buffer = ""
         while self.pty_process.isalive() and not self._is_stopped:
             try:
                 char = self.pty_process.read(1)
                 buffer += char
-                clean_buffer = self._strip_ansi(buffer)
-                if "Scan QR code" in clean_buffer:
-                    # Emit the cleaned buffer, which should contain the ASCII QR code
-                    self.qr_code_ready.emit(clean_buffer)
+                # Check for the trigger phrase in the raw buffer
+                if "Scan QR code" in buffer:
+                    # Emit the raw buffer to preserve ANSI-based QR code formatting
+                    self.qr_code_ready.emit(buffer)
             except EOFError:
                 break
 
