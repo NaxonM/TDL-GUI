@@ -35,8 +35,9 @@ TDL_STATS_RE = re.compile(
 
 
 class Worker(QThread):
-    logMessage = pyqtSignal(str)
     taskFinished = pyqtSignal(int)
+    taskFailedWithLog = pyqtSignal(int, str)
+    taskData = pyqtSignal(str)
 
     # New signals for structured data
     downloadStarted = pyqtSignal(str)
@@ -46,12 +47,12 @@ class Worker(QThread):
     statsUpdated = pyqtSignal(dict)
 
 
-    def __init__(self, commands, tdl_path, timeout=300, parent=None):
+    def __init__(self, commands, logger, timeout=300, parent=None):
         super().__init__(parent)
         if not isinstance(commands[0], list):
             commands = [commands]
         self.commands = commands
-        self.tdl_path = tdl_path
+        self.logger = logger
         self.process = None
         self._is_stopped = False
         self.seen_files = set()
@@ -64,7 +65,13 @@ class Worker(QThread):
             if self._is_stopped:
                 break
 
-            self.logMessage.emit(f"--- Running task {i+1}/{len(self.commands)}: {' '.join(command)} ---")
+            full_log = []
+            raw_output = []
+
+            task_intro = f"--- Running task {i+1}/{len(self.commands)}: {' '.join(command)} ---"
+            self.logger.info(task_intro)
+            full_log.append(task_intro)
+
             try:
                 self.process = subprocess.Popen(
                     command,
@@ -81,12 +88,16 @@ class Worker(QThread):
                     if self._is_stopped:
                         break
 
-                    line = line.strip()
-                    if not line:
+                    # Keep the raw line for data tasks, and the stripped line for parsing
+                    raw_line = line.strip()
+                    if not raw_line:
                         continue
 
+                    raw_output.append(raw_line)
+                    full_log.append(raw_line)
+
                     # Check for a completed file first
-                    done_match = TDL_DONE_RE.search(line)
+                    done_match = TDL_DONE_RE.search(raw_line)
                     if done_match:
                         data = done_match.groupdict()
                         file_id = data['file_id'].strip()
@@ -104,11 +115,11 @@ class Worker(QThread):
                         }
                         self.downloadProgress.emit(progress_data)
                         self.downloadFinished.emit(file_id)
-                        self.logMessage.emit(line) # Also log the raw message
+                        self.logger.info(raw_line) # Also log the raw message
                         continue
 
                     # Check for in-progress file
-                    progress_match = TDL_IN_PROGRESS_RE.search(line)
+                    progress_match = TDL_IN_PROGRESS_RE.search(raw_line)
                     if progress_match:
                         data = progress_match.groupdict()
                         file_id = data['file_id'].strip()
@@ -128,7 +139,7 @@ class Worker(QThread):
                         continue
 
                     # Check for overall progress
-                    overall_match = TDL_OVERALL_RE.search(line)
+                    overall_match = TDL_OVERALL_RE.search(raw_line)
                     if overall_match:
                         data = overall_match.groupdict()
                         bar = data['bar']
@@ -146,12 +157,12 @@ class Worker(QThread):
                         continue
 
                     # Check for stats
-                    stats_match = TDL_STATS_RE.search(line)
+                    stats_match = TDL_STATS_RE.search(raw_line)
                     if stats_match:
                         self.statsUpdated.emit(stats_match.groupdict())
                         continue
 
-                    self.logMessage.emit(line)
+                    self.logger.info(raw_line)
 
                 if self._is_stopped:
                     break
@@ -159,23 +170,38 @@ class Worker(QThread):
                 self.process.stdout.close()
                 return_code = self.process.wait(timeout=self.timeout)
 
-                if return_code != 0:
+                if return_code == 0:
+                    # If the task succeeded and a listener is connected to taskData, emit the raw output.
+                    if self.receivers(self.taskData) > 0:
+                        self.taskData.emit("\n".join(raw_output))
+                else:
                     overall_return_code = return_code
-                    self.logMessage.emit(f"Task failed with exit code {return_code}. Halting execution.")
+                    log_output = "\n".join(full_log)
+                    self.taskFailedWithLog.emit(return_code, log_output)
+                    self.logger.error(f"Task failed with exit code {return_code}. Halting execution.")
                     break
 
             except subprocess.TimeoutExpired:
                 self.process.kill()
-                self.logMessage.emit(f"[ERROR] Command timed out after {self.timeout} seconds. Process terminated.")
+                error_message = f"Command timed out after {self.timeout} seconds. Process terminated."
+                self.logger.error(error_message)
+                full_log.append(f"[ERROR] {error_message}")
                 overall_return_code = -1
+                self.taskFailedWithLog.emit(overall_return_code, "\n".join(full_log))
                 break
             except FileNotFoundError:
-                self.logMessage.emit(f"[ERROR] Command not found: {command[0]}")
+                error_message = f"Command not found: {command[0]}"
+                self.logger.critical(error_message)
+                full_log.append(f"[CRITICAL] {error_message}")
                 overall_return_code = -1
+                self.taskFailedWithLog.emit(overall_return_code, "\n".join(full_log))
                 break
             except Exception as e:
-                self.logMessage.emit(f"[ERROR] An unexpected error occurred: {e}")
+                error_message = f"An unexpected error occurred: {e}"
+                self.logger.error(error_message)
+                full_log.append(f"[ERROR] {error_message}")
                 overall_return_code = -1
+                self.taskFailedWithLog.emit(overall_return_code, "\n".join(full_log))
                 break
 
         self.taskFinished.emit(overall_return_code)
@@ -185,6 +211,28 @@ class Worker(QThread):
         if self.process and self.process.poll() is None:
             try:
                 self.process.terminate()
-                self.logMessage.emit("Task terminated by user.")
+                self.logger.warning("Task terminated by user.")
             except Exception as e:
-                self.logMessage.emit(f"Error terminating process: {e}")
+                self.logger.error(f"Error terminating process: {e}")
+
+
+class InitialSetupWorker(QThread):
+    """A dedicated worker for the initial download of the tdl executable."""
+    progress = pyqtSignal(int, int)
+    success = pyqtSignal(str)
+    failure = pyqtSignal(str)
+
+    def __init__(self, manager, parent=None):
+        super().__init__(parent)
+        self.manager = manager
+
+    def run(self):
+        def progress_callback(current, total):
+            self.progress.emit(current, total)
+
+        tdl_path, error = self.manager.download_and_install_tdl(progress_callback)
+
+        if error:
+            self.failure.emit(error)
+        else:
+            self.success.emit(tdl_path)

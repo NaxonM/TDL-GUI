@@ -1,0 +1,135 @@
+/* Light (Improved) */
+/* A clean and professional light theme with softer backgrounds for readability */
+
+QWidget {
+    background-color: #f5f7fa; /* Softer white */
+    color: #2d3436;
+    font-size: 14px;
+    font-family: "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+}
+
+QMainWindow, QDialog {
+    background-color: #f5f7fa;
+}
+
+QGroupBox {
+    background-color: #ffffff;
+    border: 1px solid #dfe6e9;
+    border-radius: 5px;
+    margin-top: 1em;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+}
+
+/* Input widgets with clear borders and focus */
+QLineEdit, QPlainTextEdit, QSpinBox, QDateEdit, QComboBox {
+    padding: 5px 8px;
+    border: 1px solid #b2bec3;
+    border-radius: 4px;
+    background-color: #ffffff;
+}
+
+QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDateEdit:focus, QComboBox:focus {
+    border: 1.5px solid #0984e3; /* Vibrant blue focus */
+}
+
+QPushButton, QToolButton {
+    background-color: #0984e3;
+    color: white;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-weight: bold;
+    border: 1px solid #0984e3;
+}
+
+QToolButton {
+    padding: 4px;
+}
+
+QPushButton:hover, QToolButton:hover {
+    background-color: #74b9ff;
+    border-color: #74b9ff;
+}
+
+QPushButton:pressed, QToolButton:pressed {
+    background-color: #0984e3;
+    border-color: #0984e3;
+}
+
+QPushButton:disabled, QToolButton:disabled {
+    background-color: #dfe6e9;
+    color: #b2bec3;
+    border-color: #dfe6e9;
+}
+
+QPushButton[class="stop-button"] {
+    background-color: #d63031;
+    border-color: #d63031;
+}
+
+QPushButton[class="stop-button"]:hover {
+    background-color: #ff7675;
+    border-color: #ff7675;
+}
+
+QProgressBar {
+    border: 1px solid #b2bec3;
+    border-radius: 5px;
+    text-align: center;
+    background-color: #dfe6e9;
+}
+
+QProgressBar::chunk {
+    background-color: #0984e3;
+    border-radius: 4px;
+}
+
+QTabBar::tab {
+    background: #e4e9ed;
+    border: 1px solid #dfe6e9;
+    border-bottom: none;
+    padding: 8px 12px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+    background: #f5f7fa;
+    border-color: #0984e3;
+}
+
+QTabBar::tab:!selected:hover {
+    background: #ffffff;
+}
+
+QTabWidget::pane {
+    border: 1px solid #dfe6e9;
+    border-top: none;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: #f5f7fa;
+    width: 12px;
+    margin: 15px 0 15px 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #b2bec3;
+    min-height: 20px;
+    border-radius: 6px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}

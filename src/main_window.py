@@ -6,13 +6,15 @@ import glob
 import json
 import tempfile
 import urllib.request
-from PyQt6.QtCore import pyqtSignal, QDir, QUrl, QDate, QDateTime, Qt, QSize
+import subprocess
+import re
+from PyQt6.QtCore import pyqtSignal, QDir, QUrl, QDate, QDateTime, Qt, QSize, QStandardPaths
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QFormLayout, QMenu, QPlainTextEdit, QGroupBox, QPushButton,
-    QLineEdit, QToolButton, QSpinBox, QCheckBox, QRadioButton, QProgressBar,
+    QFormLayout, QMenu, QPlainTextEdit, QGroupBox, QPushButton,
+    QLineEdit, QToolButton, QSpinBox, QCheckBox, QProgressBar,
     QFileDialog, QMessageBox, QDateEdit, QLabel, QComboBox, QScrollArea, QStackedWidget,
-    QAbstractSpinBox, QStyle
+    QAbstractSpinBox, QStyle, QTableWidget, QHeaderView, QTableWidgetItem
 )
 from PyQt6.QtGui import QAction, QDesktopServices, QColor, QTextCursor, QTextCharFormat, QPalette
 
@@ -21,21 +23,19 @@ from worker import Worker
 from settings_dialog import SettingsDialog
 from utility_dialog import UtilityDialog
 from progress_widget import DownloadProgressWidget
+from settings_manager import SettingsManager
+from logger import Logger
 
 class MainWindow(QMainWindow):
-    log_message = pyqtSignal(str)
-
     # Configuration for utility commands
     UTILITY_CONFIGS = {
-        'list_chats': {
-            'title': 'List Chats',
-            'base_cmd': ['tdl', 'chat', 'ls'],
-            'fields': []
-        },
-        'export_members': {
-            'title': 'Export Members',
+        'export_members_by_id': {
+            'title': 'Export Members by ID',
             'base_cmd': ['tdl', 'chat', 'users'],
-            'fields': [{'name': 'chat_id', 'label': 'Chat ID or Username:', 'arg': '-c'}]
+            'fields': [
+                {'name': 'chat_id', 'label': 'Chat ID or Username:', 'arg': '-c'},
+                {'name': 'output_file', 'label': 'Output JSON File:', 'arg': '-o', 'type': 'save_file'}
+            ]
         },
         'backup_data': {
             'title': 'Backup Data',
@@ -56,33 +56,53 @@ class MainWindow(QMainWindow):
         },
     }
 
-    def __init__(self, tdl_path, theme='light'):
+    CHAT_NAME_COLORS = [
+        QColor("#1ABC9C"), QColor("#2ECC71"), QColor("#3498DB"), QColor("#9B59B6"),
+        QColor("#34495E"), QColor("#F1C40F"), QColor("#E67E22"), QColor("#E74C3C"),
+        QColor("#95A5A6"), QColor("#16A085"), QColor("#27AE60"), QColor("#2980B9"),
+        QColor("#8E44AD"), QColor("#2C3E50"), QColor("#F39C12"), QColor("#D35400"),
+        QColor("#C0392B"), QColor("#7F8C8D")
+    ]
+
+    def __init__(self, app, tdl_path, settings_manager, logger, theme='light'):
         super().__init__()
+        self.app = app
         self.tdl_path = tdl_path
+        self.settings_manager = settings_manager
+        self.logger = logger
         self.theme = theme
         self.worker = None
+        self.tdl_version = self._get_tdl_version()
         self.progress_widgets = {}
         self.download_controls = []
+        self.export_controls = []
+        self.global_controls = []
+        self.has_started_download = False
+        self.active_task_tab_index = -1
+        self.original_tab_text = ""
 
-        self._init_settings()
+        if self.theme == 'dark':
+            self.error_color = QColor("#FF5555")
+            self.warn_color = QColor("#FFC107")
+        elif self.theme == 'nord':
+            self.error_color = QColor("#BF616A")  # nord11
+            self.warn_color = QColor("#EBCB8B")   # nord13
+        elif self.theme == 'solarized-dark':
+            self.error_color = QColor("#dc322f")  # red
+            self.warn_color = QColor("#b58900")   # yellow
+        elif self.theme == 'solarized-light':
+            self.error_color = QColor("#dc322f")  # red
+            self.warn_color = QColor("#b58900")   # yellow
+        else:  # light theme
+            self.error_color = QColor("#D32F2F")
+            self.warn_color = QColor("#F57F17")
+
+
         self._init_ui()
         self._setup_connections()
-        # The original _apply_stylesheet was removed from here because it's better to
-        # apply the stylesheet from main.py to the whole app at once.
+        self.logger.info("Application initialized.")
+        self.logger.info(f"Settings loaded from {self.settings_manager.settings_path}")
 
-        self.log_message.emit("Application initialized.")
-
-    def _init_settings(self):
-        """Initializes settings and theme-dependent variables."""
-        self.settings = {
-            'debug_mode': False, 'storage_path': '', 'auto_proxy': True,
-            'manual_proxy': '', 'storage_driver': 'bolt', 'namespace': 'default',
-            'command_timeout': 300, 'ntp_server': '', 'reconnect_timeout': '5m'
-        }
-        if self.theme == 'dark':
-            self.error_color = QColor("#BF616A")
-        else:
-            self.error_color = QColor("#D32F2F")
 
     def _init_ui(self):
         """Initializes the main UI components."""
@@ -94,24 +114,33 @@ class MainWindow(QMainWindow):
 
         self.download_tab = self._create_download_tab()
         self.export_tab = self._create_export_tab()
+        self.chats_tab = self._create_chats_tab()
         self.log_tab = self._create_log_tab()
-        
-        # FIX: Add run_export_button to controls AFTER it is created.
-        self.download_controls.append(self.run_export_button)
-
 
         self.tabs.addTab(self.download_tab, "Download")
         self.tabs.addTab(self.export_tab, "Export")
+        self.tabs.addTab(self.chats_tab, "Chats")
         self.tabs.addTab(self.log_tab, "Log")
 
         self._create_menu_bar()
         self._create_status_bar()
+        self._update_namespace_display()
+
+        self.global_controls.extend([
+            self.refresh_chats_button,
+            self.chats_table,
+            self.tools_menu,
+            self.start_download_button,
+            self.resume_download_button,
+            self.run_export_button,
+        ])
 
     def _setup_connections(self):
         """Connects all signals to slots."""
-        self.log_message.connect(self.append_log)
+        self.logger.log_signal.connect(self.append_log)
         # Download Tab Connections
         self.start_download_button.clicked.connect(self.handle_download_button)
+        self.resume_download_button.clicked.connect(self.handle_resume_button)
         self.load_from_file_button.clicked.connect(self.load_source_from_file)
         self.browse_dest_button.clicked.connect(self.select_destination_directory)
         self.clear_source_button.clicked.connect(self.source_input.clear)
@@ -123,18 +152,12 @@ class MainWindow(QMainWindow):
         self.run_export_button.clicked.connect(self.handle_export_button)
         self.export_type_combo.currentIndexChanged.connect(self.filter_stack.setCurrentIndex)
 
-
-    # ---------------------------------------------------------------------
-    # UI Creation Methods (Refactored)
-    # ---------------------------------------------------------------------
-
     def _create_download_tab(self):
         """Creates the main 'Download' tab widget."""
         widget = QWidget()
         main_layout = QVBoxLayout(widget)
         main_layout.setSpacing(15)
 
-        # Create UI sections
         source_group = self._create_download_source_group()
         dest_group = self._create_download_destination_group()
         self.advanced_group = self._create_download_advanced_group()
@@ -142,19 +165,25 @@ class MainWindow(QMainWindow):
 
         self.start_download_button = QPushButton("Start Download")
         self.start_download_button.setObjectName("ActionButton")
+        self.resume_download_button = QPushButton("Resume Last Download")
+        self.resume_download_button.setObjectName("ActionButton")
+        self.resume_download_button.setEnabled(False)
 
-        # Add widgets to layout
+        action_button_layout = QHBoxLayout()
+        action_button_layout.addStretch()
+        action_button_layout.addWidget(self.start_download_button)
+        action_button_layout.addWidget(self.resume_download_button)
+        action_button_layout.addStretch()
+
         main_layout.addWidget(source_group)
         main_layout.addWidget(dest_group)
         main_layout.addWidget(self.advanced_group)
-        main_layout.addWidget(self.start_download_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        main_layout.addLayout(action_button_layout)
         main_layout.addWidget(progress_group)
 
-        # Collect controls to be disabled during download
         self.download_controls.extend([
             self.source_input, self.load_from_file_button, self.clear_source_button,
             self.dest_path_input, self.browse_dest_button, self.advanced_group
-            # run_export_button is now added in _init_ui
         ])
         return widget
 
@@ -163,14 +192,21 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
         self.source_input = QPlainTextEdit()
         self.source_input.setPlaceholderText("Paste message links or file paths here, one per line.")
-        
+        self.source_input.setToolTip("Enter one Telegram message link (e.g., https://t.me/channel/123) or one local .json file path per line.")
+
         button_layout = QHBoxLayout()
         self.load_from_file_button = QPushButton("Load from File...")
+        self.load_from_file_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        self.load_from_file_button.setToolTip("Load a list of sources from a text file.")
+
         self.clear_source_button = QPushButton("Clear")
+        self.clear_source_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
+        self.clear_source_button.setToolTip("Clear all text from the source input box.")
+
         button_layout.addWidget(self.load_from_file_button)
         button_layout.addWidget(self.clear_source_button)
         button_layout.addStretch()
-        
+
         layout.addWidget(self.source_input)
         layout.addLayout(button_layout)
         return group
@@ -212,12 +248,13 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(5, 10, 5, 5)
 
-        # --- Column 1: Concurrency, Connection, Rate Limiting ---
         col1_layout = QVBoxLayout()
         concurrency_group = QGroupBox("Concurrency")
         concurrency_form = QFormLayout(concurrency_group)
         tasks_widget, self.concurrent_tasks_spinbox = self._create_spinbox_with_arrows(1, 16, 2)
+        self.concurrent_tasks_spinbox.setToolTip("Set the maximum number of files to download at the same time.")
         threads_widget, self.threads_per_task_spinbox = self._create_spinbox_with_arrows(1, 16, 4)
+        self.threads_per_task_spinbox.setToolTip("Set the maximum number of parallel connections for a single file.")
         concurrency_form.addRow("Concurrent Tasks:", tasks_widget)
         concurrency_form.addRow("Threads per Task:", threads_widget)
         col1_layout.addWidget(concurrency_group)
@@ -225,6 +262,7 @@ class MainWindow(QMainWindow):
         pool_group = QGroupBox("Connection")
         pool_form = QFormLayout(pool_group)
         pool_widget, self.pool_spinbox = self._create_spinbox_with_arrows(0, 100, 8)
+        self.pool_spinbox.setToolTip("Advanced: The size of the DC pool for the Telegram client.\nLeave at 8 unless you have connection issues.")
         pool_form.addRow("DC Pool Size:", pool_widget)
         col1_layout.addWidget(pool_group)
 
@@ -232,6 +270,7 @@ class MainWindow(QMainWindow):
         delay_form = QFormLayout(delay_group)
         delay_layout = QHBoxLayout()
         delay_widget, self.delay_spinbox = self._create_spinbox_with_arrows(0, 99999, 0)
+        self.delay_spinbox.setToolTip("Wait a specified amount of time between download tasks to avoid API rate limits.")
         self.delay_unit_combo = QComboBox()
         self.delay_unit_combo.addItems(["ms", "s", "m"])
         delay_layout.addWidget(delay_widget, 1)
@@ -240,16 +279,20 @@ class MainWindow(QMainWindow):
         col1_layout.addWidget(delay_group)
         col1_layout.addStretch()
 
-        # --- Column 2: Behavioral Flags ---
         col2_layout = QVBoxLayout()
         flags_group = QGroupBox("Behavioral Flags")
         flags_layout = QVBoxLayout(flags_group)
         self.desc_checkbox = QCheckBox("Download in descending order")
+        self.desc_checkbox.setToolTip("Download files from newest to oldest instead of the default (oldest to newest).")
         self.skip_same_checkbox = QCheckBox("Skip identical files")
+        self.skip_same_checkbox.setToolTip("If a file with the same name and size already exists in the destination, skip it.")
         self.skip_same_checkbox.setChecked(True)
         self.rewrite_ext_checkbox = QCheckBox("Rewrite file extension")
+        self.rewrite_ext_checkbox.setToolTip("Renames the file extension based on its actual content type (MIME type).")
         self.group_checkbox = QCheckBox("Auto-download albums/groups")
+        self.group_checkbox.setToolTip("If a message link points to a file in an album, download all other files in that album automatically.")
         self.takeout_checkbox = QCheckBox("Use takeout session (lowers limits)")
+        self.takeout_checkbox.setToolTip("Use a special session type that is less prone to API rate limits.\nUseful for very large downloads.")
         flags = [self.desc_checkbox, self.skip_same_checkbox, self.rewrite_ext_checkbox, self.group_checkbox, self.takeout_checkbox]
         for flag in flags:
             flags_layout.addWidget(flag)
@@ -265,23 +308,23 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(5, 10, 5, 5)
 
-        # --- Filters Group ---
         filters_group = QGroupBox("File Filters")
         filters_form = QFormLayout(filters_group)
         self.include_ext_input = QLineEdit()
         self.include_ext_input.setPlaceholderText("e.g., mp4,mkv,zip")
+        self.include_ext_input.setToolTip("Only download files with these extensions. Cannot be used with Exclude.")
         self.exclude_ext_input = QLineEdit()
         self.exclude_ext_input.setPlaceholderText("e.g., jpg,png,gif")
+        self.exclude_ext_input.setToolTip("Do not download files with these extensions. Cannot be used with Include.")
         filters_form.addRow("Include Exts:", self.include_ext_input)
         filters_form.addRow("Exclude Exts:", self.exclude_ext_input)
         layout.addWidget(filters_group)
 
-        # --- Template Group ---
         template_group = QGroupBox("Filename Template")
         template_v_layout = QVBoxLayout(template_group)
         template_h_layout = QHBoxLayout()
         self.template_combo = QComboBox()
-        self.template_combo.addItems(["Default: {{ .FileName }}", "{{ .DialogID }}/{{ .FileName }}", "{{ .MessageID }}-{{ .FileName }}", "Custom..."])
+        self.template_combo.addItems(["Default: {{ .DialogID }}_{{ .MessageID }}_{{ filenamify .FileName }}", "{{ .DialogID }}/{{ .FileName }}", "{{ .MessageID }}-{{ .FileName }}", "{{ .FileName }}", "Custom..."])
         self.template_input = QLineEdit()
         self.template_input.setPlaceholderText("Enter custom template...")
         self.template_input.setVisible(False)
@@ -294,7 +337,6 @@ class MainWindow(QMainWindow):
         template_h_layout.addWidget(template_help_button)
         template_v_layout.addLayout(template_h_layout)
 
-        # Placeholder buttons
         self.placeholder_widget = self._create_template_placeholders()
         self.placeholder_widget.setVisible(False)
         template_v_layout.addWidget(self.placeholder_widget)
@@ -336,7 +378,6 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(widget)
         main_layout.setSpacing(15)
 
-        # Create UI sections
         source_group = self._create_export_source_group()
         options_group = self._create_export_options_group()
         content_group = self._create_export_content_group()
@@ -344,12 +385,25 @@ class MainWindow(QMainWindow):
         self.run_export_button = QPushButton("Export to JSON...")
         self.run_export_button.setObjectName("ActionButton")
 
-        # Add widgets to layout
+        self.export_advanced_group = self._create_export_advanced_group()
+
+        action_button_layout = QHBoxLayout()
+        action_button_layout.addStretch()
+        action_button_layout.addWidget(self.run_export_button)
+        action_button_layout.addStretch()
+
         main_layout.addWidget(source_group)
         main_layout.addWidget(options_group)
         main_layout.addWidget(content_group)
-        main_layout.addWidget(self.run_export_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        main_layout.addWidget(self.export_advanced_group)
+        main_layout.addLayout(action_button_layout)
         main_layout.addStretch()
+
+        self.export_controls.extend([
+            self.export_source_input, self.export_type_combo, self.filter_stack,
+            self.export_with_content_checkbox, self.export_all_types_checkbox,
+            self.export_advanced_group
+        ])
         return widget
         
     def _create_export_source_group(self):
@@ -357,6 +411,7 @@ class MainWindow(QMainWindow):
         layout = QFormLayout(group)
         self.export_source_input = QLineEdit()
         self.export_source_input.setPlaceholderText("Enter Channel/Chat ID or Username")
+        self.export_source_input.setToolTip("Enter the source to export from, e.g., 'telegram' or '-100123456789'.")
         layout.addRow("Channel/Chat Source:", self.export_source_input)
         return group
 
@@ -368,9 +423,8 @@ class MainWindow(QMainWindow):
         self.export_type_combo.addItems(["All Messages", "By Time Range", "By ID Range", "Last N Messages"])
         
         self.filter_stack = QStackedWidget()
-        self.filter_stack.addWidget(QWidget()) # Empty widget for "All Messages"
+        self.filter_stack.addWidget(QWidget())
         
-        # Time Range Widget
         time_range_widget = QWidget()
         time_range_layout = QHBoxLayout(time_range_widget)
         self.from_date_edit = QDateEdit(calendarPopup=True, displayFormat="yyyy-MM-dd")
@@ -381,7 +435,6 @@ class MainWindow(QMainWindow):
         time_range_layout.addWidget(self.to_date_edit)
         self.filter_stack.addWidget(time_range_widget)
         
-        # ID Range Widget
         id_range_widget = QWidget()
         id_range_layout = QHBoxLayout(id_range_widget)
         self.from_id_input = QLineEdit(placeholderText="e.g., 1")
@@ -392,7 +445,6 @@ class MainWindow(QMainWindow):
         id_range_layout.addWidget(self.to_id_input)
         self.filter_stack.addWidget(id_range_widget)
         
-        # Last N Messages Widget
         last_n_widget = QWidget()
         last_n_layout = QHBoxLayout(last_n_widget)
         self.last_n_spinbox = QSpinBox(minimum=1, maximum=1_000_000, value=100)
@@ -415,17 +467,92 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.export_all_types_checkbox)
         return group
     
+    def _create_export_advanced_group(self):
+        group = QGroupBox("Advanced Filtering")
+        group.setCheckable(True)
+        group.setChecked(False)
+
+        form_layout = QFormLayout()
+        self.export_filter_input = QLineEdit()
+        self.export_filter_input.setPlaceholderText("e.g., 'IsPhoto && HasViews'")
+        self.export_filter_input.setToolTip("Filter messages using a powerful expression.\nSee tdl documentation for syntax.")
+        self.export_reply_input = QLineEdit()
+        self.export_reply_input.setPlaceholderText("Export replies to a specific message ID")
+        self.export_reply_input.setToolTip("Only export messages that are replies to this specific message ID.")
+        self.export_topic_input = QLineEdit()
+        self.export_topic_input.setPlaceholderText("Export from a specific topic/forum ID")
+        self.export_topic_input.setToolTip("For groups with Topics enabled, export messages from a specific topic ID.")
+
+        form_layout.addRow("Filter Expression:", self.export_filter_input)
+        form_layout.addRow("Replies to Message ID:", self.export_reply_input)
+        form_layout.addRow("Topic ID:", self.export_topic_input)
+
+        container_widget = QWidget()
+        container_widget.setLayout(form_layout)
+        container_widget.setVisible(False)
+
+        group_layout = QVBoxLayout(group)
+        group_layout.addWidget(container_widget)
+
+        group.toggled.connect(container_widget.setVisible)
+
+        return group
+
     def _create_log_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         self.log_output = QPlainTextEdit()
         self.log_output.setReadOnly(True)
         self.log_output.setObjectName("LogOutput")
+
+        button_layout = QHBoxLayout()
+        open_log_button = QPushButton("Open Log File Location")
+        open_log_button.clicked.connect(self.open_log_directory)
+        button_layout.addStretch()
+        button_layout.addWidget(open_log_button)
+
         layout.addWidget(self.log_output)
+        layout.addLayout(button_layout)
         return widget
 
+    def open_log_directory(self):
+        log_dir = self.settings_manager.config_dir
+        QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
+
+    def _create_chats_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        button_layout = QHBoxLayout()
+        self.refresh_chats_button = QPushButton("Refresh Chat List")
+        self.refresh_chats_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.refresh_chats_button.setToolTip("Fetch the latest list of your chats from Telegram.")
+        button_layout.addWidget(self.refresh_chats_button)
+        button_layout.addStretch()
+
+        self.chats_table = QTableWidget()
+        self.chats_table.setColumnCount(4)
+        self.chats_table.setHorizontalHeaderLabels(["Name", "Type", "ID", "Username"])
+        self.chats_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.chats_table.verticalHeader().setVisible(False)
+        self.chats_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.chats_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.chats_table.setSortingEnabled(True)
+        self.chats_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.chats_table.customContextMenuRequested.connect(self._show_chat_context_menu)
+
+
+        layout.addLayout(button_layout)
+        layout.addWidget(self.chats_table)
+
+        self.refresh_chats_button.clicked.connect(self.handle_refresh_chats)
+
+        return widget
+
+    def handle_refresh_chats(self):
+        self.run_list_chats()
+
     def _create_status_bar(self):
-        """Creates and configures the status bar."""
         self.status_label = QLabel("Ready")
         self.status_progress = QProgressBar()
         self.status_progress.setRange(0, 100)
@@ -435,17 +562,24 @@ class MainWindow(QMainWindow):
 
         self.cpu_label = QLabel("CPU: N/A")
         self.mem_label = QLabel("Mem: N/A")
+        self.namespace_label = QLabel("NS: default")
         self.cpu_label.setObjectName("StatsLabel")
         self.mem_label.setObjectName("StatsLabel")
+        self.namespace_label.setObjectName("StatsLabel")
 
+        self.statusBar().addPermanentWidget(self.namespace_label)
         self.statusBar().addPermanentWidget(self.status_label)
         self.statusBar().addPermanentWidget(self.status_progress)
         self.statusBar().addPermanentWidget(self.cpu_label)
         self.statusBar().addPermanentWidget(self.mem_label)
         self.statusBar().showMessage("Ready")
 
+    def _update_namespace_display(self):
+        """Updates the namespace label in the status bar."""
+        namespace = self.settings_manager.get('namespace', 'default')
+        self.namespace_label.setText(f"NS: {namespace}")
+
     def _create_spinbox_with_arrows(self, min_val, max_val, default_val):
-        """Creates a custom spinbox widget with separate up/down buttons."""
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -464,51 +598,145 @@ class MainWindow(QMainWindow):
         layout.addWidget(up_button)
         return container, spinbox
 
-    def _apply_stylesheet(self):
-        """This method is now deprecated, as styling is handled in main.py."""
-        pass
+    def set_task_running_ui_state(self, is_running, tab_index=-1):
+        """Enables or disables UI controls based on the state of a running task."""
+        all_controls = self.download_controls + self.export_controls + self.global_controls
+        for widget in all_controls:
+            widget.setEnabled(not is_running)
 
+        # Explicitly handle the main action buttons that change text or have special logic
+        self.start_download_button.setText("Stop Download" if is_running else "Start Download")
 
-    # ---------------------------------------------------------------------
-    # Handler and Logic Methods (Integrated)
-    # ---------------------------------------------------------------------
-
-    def set_download_ui_state(self, is_downloading):
-        """Enables or disables UI controls based on download state."""
-        # Add the menu to the list of controls to be disabled
-        if self.tools_menu not in self.download_controls:
-            self.download_controls.append(self.tools_menu)
-        
-        for widget in self.download_controls:
-            widget.setEnabled(not is_downloading)
-        
-        if is_downloading:
-            self.start_download_button.setText("Stop Download")
-            # Set a property for QSS to pick up
+        if is_running:
+            self.resume_download_button.setEnabled(False)
             self.start_download_button.setProperty("class", "stop-button")
             self.status_progress.show()
             self.status_label.setText("Starting...")
             self.cpu_label.setText("CPU: ...")
             self.mem_label.setText("Mem: ...")
+
+            # Update tab text to show activity
+            if tab_index != -1:
+                self.active_task_tab_index = tab_index
+                self.original_tab_text = self.tabs.tabText(tab_index)
+                self.tabs.setTabText(tab_index, f"{self.original_tab_text} ●")
+
         else:
-            self.start_download_button.setText("Start Download")
-            self.start_download_button.setProperty("class", "") # Clear property
+            if self.has_started_download:
+                self.resume_download_button.setEnabled(True)
+            self.start_download_button.setProperty("class", "")
             self.status_progress.hide()
             self.cpu_label.setText("CPU: N/A")
             self.mem_label.setText("Mem: N/A")
 
-        # Re-polish the widget to apply the new style property
+            # Restore original tab text
+            if self.active_task_tab_index != -1:
+                self.tabs.setTabText(self.active_task_tab_index, self.original_tab_text)
+                self.active_task_tab_index = -1
+                self.original_tab_text = ""
+
         self.start_download_button.style().unpolish(self.start_download_button)
         self.start_download_button.style().polish(self.start_download_button)
         
+    def run_list_chats(self):
+        if self.worker is not None and self.worker.isRunning():
+            self.logger.warning("A task is already running. Please wait for it to complete.")
+            return
+
+        self.logger.info("Fetching chat list...")
+        command = [self.tdl_path, 'chat', 'ls', '-o', 'json']
+
+        # Add global flags
+        if self.settings_manager.get('debug_mode', False): command.append('--debug')
+        command.extend(self._get_proxy_args())
+        command.extend(self._get_storage_args())
+        command.extend(self._get_namespace_args())
+
+        timeout = self.settings_manager.get('command_timeout', 300)
+        self.worker = Worker(command, self.logger, timeout=timeout)
+        self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
+        self.worker.taskData.connect(self._populate_chats_table)
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.start()
+        self.set_task_running_ui_state(is_running=True, tab_index=2) # 2 is the Chats tab
+
+    def _show_chat_context_menu(self, position):
+        selected_items = self.chats_table.selectedItems()
+        if not selected_items:
+            return
+
+        # Get the chat ID from the selected row (column 2)
+        selected_row = selected_items[0].row()
+        chat_id_item = self.chats_table.item(selected_row, 2)
+        if not chat_id_item:
+            return
+        chat_id = chat_id_item.text()
+
+        menu = QMenu()
+        copy_id_action = menu.addAction("Copy Chat ID")
+        export_messages_action = menu.addAction("Export Messages...")
+        export_members_action = menu.addAction("Export Members...")
+
+        action = menu.exec(self.chats_table.viewport().mapToGlobal(position))
+
+        if action == copy_id_action:
+            self._handle_copy_chat_id(chat_id)
+        elif action == export_messages_action:
+            self._handle_export_chat_messages(chat_id)
+        elif action == export_members_action:
+            self._handle_export_chat_members(chat_id)
+
+    def _handle_copy_chat_id(self, chat_id):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(chat_id)
+        self.logger.info(f"Copied Chat ID to clipboard: {chat_id}")
+
+    def _handle_export_chat_messages(self, chat_id):
+        self.tabs.setCurrentWidget(self.export_tab)
+        self.export_source_input.setText(chat_id)
+        self.logger.info(f"Switched to Export tab for Chat ID: {chat_id}")
+
+    def _populate_chats_table(self, json_data):
+        try:
+            chats = json.loads(json_data)
+            self.chats_table.setSortingEnabled(False) # Disable sorting during population
+            self.chats_table.setRowCount(0) # Clear existing rows
+
+            for chat in chats:
+                row_position = self.chats_table.rowCount()
+                self.chats_table.insertRow(row_position)
+
+                name = chat.get('visible_name', '')
+                type = chat.get('type', '')
+                id_str = str(chat.get('id', ''))
+                username = chat.get('username', '')
+
+                # Color the chat name
+                name_item = QTableWidgetItem(name)
+                if id_str:
+                    color_index = hash(id_str) % len(self.CHAT_NAME_COLORS)
+                    name_item.setForeground(self.CHAT_NAME_COLORS[color_index])
+
+                self.chats_table.setItem(row_position, 0, name_item)
+                self.chats_table.setItem(row_position, 1, QTableWidgetItem(type))
+                self.chats_table.setItem(row_position, 2, QTableWidgetItem(id_str))
+                self.chats_table.setItem(row_position, 3, QTableWidgetItem(username))
+
+            self.chats_table.setSortingEnabled(True)
+            self.logger.info(f"Successfully populated chats table with {len(chats)} chats.")
+
+        except json.JSONDecodeError:
+            self.logger.error("Failed to parse JSON data from 'tdl chat ls' command.")
+            QMessageBox.critical(self, "Error", "Could not parse the chat list from tdl. See logs for details.")
+
     def _on_template_change(self, text):
-        """Handles visibility of custom template input."""
         is_custom = (text == "Custom...")
         self.template_input.setVisible(is_custom)
         self.placeholder_widget.setVisible(is_custom)
 
     def insert_template_placeholder(self, placeholder):
-        """Inserts a template placeholder string into the custom template input."""
         self.template_combo.setCurrentText("Custom...")
         self.template_input.setFocus()
         cursor_pos = self.template_input.cursorPosition()
@@ -517,20 +745,33 @@ class MainWindow(QMainWindow):
         self.template_input.setText(new_text)
         self.template_input.setCursorPosition(cursor_pos + len(f"{{{{ .{placeholder} }}}}"))
 
-    def append_log(self, message):
+    def append_log(self, message, level):
         cursor = self.log_output.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
+
         char_format = QTextCharFormat()
         default_color = self.palette().color(QPalette.ColorRole.Text)
         char_format.setForeground(default_color)
-        if "[ERROR]" in message or "Traceback" in message or "failed" in message.lower():
+
+        if level == "WARNING":
+            char_format.setForeground(self.warn_color)
+        elif level in ["ERROR", "CRITICAL"]:
             char_format.setForeground(self.error_color)
+
         cursor.setCharFormat(char_format)
+        # We only insert the message, as the logger already formats it with timestamp/level
         cursor.insertText(message + '\n')
+
+        # Reset format for next entries
         cursor.movePosition(QTextCursor.MoveOperation.End)
         cursor.setCharFormat(QTextCharFormat())
         self.log_output.setTextCursor(cursor)
-        self.statusBar().showMessage(message, 5000)
+
+        # Show important messages in the status bar
+        if level in ["INFO", "WARNING", "ERROR", "CRITICAL"]:
+            # Strip the timestamp and level for a cleaner status bar message
+            status_message = ' - '.join(message.split(' - ')[2:])
+            self.statusBar().showMessage(status_message, 5000)
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -544,8 +785,7 @@ class MainWindow(QMainWindow):
         self.tools_menu.addAction(settings_action)
         self.tools_menu.addSeparator()
         utility_actions = [
-            ('List Chats', self.UTILITY_CONFIGS['list_chats']),
-            ('Export Members', self.UTILITY_CONFIGS['export_members']),
+            ('Export Members by ID...', self.UTILITY_CONFIGS['export_members_by_id']),
             'separator',
             ('Backup Data', self.UTILITY_CONFIGS['backup_data']),
             ('Recover Data', self.UTILITY_CONFIGS['recover_data']),
@@ -564,45 +804,110 @@ class MainWindow(QMainWindow):
         doc_action.triggered.connect(self.show_documentation)
         about_action = QAction("About", self)
         about_action.triggered.connect(self.show_about_dialog)
+        update_action = QAction("Check for Updates...", self)
+        update_action.triggered.connect(self.check_for_updates)
         help_menu.addAction(doc_action)
+        help_menu.addAction(update_action)
         help_menu.addAction(about_action)
 
     def show_documentation(self):
         QDesktopServices.openUrl(QUrl("https://docs.iyear.me/tdl/"))
 
+    def _get_tdl_version(self):
+        try:
+            result = subprocess.run([self.tdl_path, 'version'], capture_output=True, text=True, check=True)
+            # Example output: "tdl version 0.7.3"
+            version_line = result.stdout.strip()
+            return version_line
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            self.logger.error(f"Could not get tdl version: {e}")
+            return "Unknown"
+
     def show_about_dialog(self):
-        QMessageBox.about(self, "About tdl GUI", "<h3>tdl GUI</h3><p>A graphical user interface for the tdl command-line tool.</p><p>Built with PyQt6.</p>")
+        about_text = f"""
+            <h3>tdl GUI</h3>
+            <p>A graphical user interface for the tdl command-line tool.</p>
+            <p><b>tdl version:</b> {self.tdl_version}</p>
+            <p>Built with PyQt6.</p>
+        """
+        QMessageBox.about(self, "About tdl GUI", about_text)
 
     def open_settings_dialog(self):
-        dialog = SettingsDialog(self.settings, self)
-        dialog.login_requested.connect(self.handle_login_request)
+        dialog = SettingsDialog(self.tdl_path, self.settings_manager, self)
+        dialog.desktop_login_requested.connect(self.handle_desktop_login)
         if dialog.exec():
-            self.settings.update(dialog.settings)
-            self.log_message.emit(f"Settings updated. Active account is now '{self.settings['namespace']}'.")
+            # The dialog now directly modifies the settings manager's state
+            self.settings_manager.save_settings()
+            active_ns = self.settings_manager.get('namespace')
+            self.logger.info(f"Settings saved. Active account is now '{active_ns}'.")
+            self._update_namespace_display()
         else:
-            self.log_message.emit("Settings dialog cancelled.")
+            self.logger.info("Settings dialog cancelled.")
 
-    def handle_login_request(self, namespace):
+    def check_for_updates(self):
+        self.logger.info("Checking for tdl updates...")
+        try:
+            # Get local version
+            local_version_str = self.tdl_version
+            match = re.search(r'(\d+\.\d+\.\d+)', local_version_str)
+            if not match:
+                QMessageBox.warning(self, "Update Check Failed", f"Could not parse local version: {local_version_str}")
+                return
+            local_version = match.group(1)
+
+            # Get latest version from GitHub
+            url = "https://api.github.com/repos/iyear/tdl/releases/latest"
+            with urllib.request.urlopen(url) as response:
+                data = json.loads(response.read().decode())
+                latest_version = data['tag_name'].lstrip('v')
+                release_notes = data['body']
+                download_url = ""
+                for asset in data['assets']:
+                    if 'linux' in asset['name'] and 'amd64' in asset['name']:
+                         download_url = asset['browser_download_url']
+                         break
+
+            self.logger.info(f"Local version: {local_version}, Latest version: {latest_version}")
+
+            if local_version < latest_version:
+                reply = QMessageBox.information(
+                    self, "Update Available",
+                    f"A new version of tdl is available: <b>{latest_version}</b><br><br>"
+                    f"<b>Release Notes:</b><br>{release_notes}<br><br>"
+                    "Would you like to download and install it now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.logger.info(f"User agreed to update to version {latest_version}")
+                    # I will implement the download and update logic later
+                    QMessageBox.information(self, "Not Implemented", "The automatic update functionality is not yet implemented.")
+
+            else:
+                QMessageBox.information(self, "No Updates", "You are using the latest version of tdl.")
+
+        except Exception as e:
+            self.logger.error(f"Failed to check for updates: {e}")
+            QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates. See logs for details.")
+
+    def handle_desktop_login(self, path, passcode):
+        self.logger.info("Desktop login requested. See log for details.")
         if self.worker is not None and self.worker.isRunning():
-            self.log_message.emit("A task is already running. Please wait.")
+            self.logger.warning("A task is already running. Please wait.")
             return
-        self.log_message.emit(f"Starting login process for account: '{namespace}'...")
-        command = [self.tdl_path, 'login', '--ns', namespace]
-        command.extend(self._get_proxy_args())
-        command.extend(self._get_storage_args())
-        if self.settings.get('debug_mode', False):
-            command.append('--debug')
-        command.extend(self._get_ntp_args())
-        command.extend(self._get_reconnect_timeout_args())
-        timeout = self.settings.get('command_timeout', 300)
-        self.worker = Worker(command, self.tdl_path, timeout=timeout)
-        self.worker.logMessage.connect(self.append_log)
+
+        self.logger.info(f"Attempting to log in from desktop client at: {path}")
+        command = [self.tdl_path, 'login', '-d', path]
+        if passcode:
+            command.extend(['-p', passcode])
+
+        timeout = self.settings_manager.get('command_timeout', 300)
+        self.worker = Worker(command, self.logger, timeout=timeout)
         self.worker.taskFinished.connect(self._task_finished)
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, SettingsDialog):
-                widget.close()
+        self.worker.taskFailedWithLog.connect(self._task_failed)
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
-        self.set_download_ui_state(is_downloading=True)
+        self.set_task_running_ui_state(is_running=True, tab_index=-1)
 
     def select_destination_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Destination Directory", QDir.homePath())
@@ -615,73 +920,32 @@ class MainWindow(QMainWindow):
             try:
                 with open(filepath, 'r') as f:
                     self.source_input.setPlainText(f.read())
-                self.log_message.emit(f"Loaded sources from {filepath}")
+                self.logger.info(f"Loaded sources from {filepath}")
             except Exception as e:
-                self.log_message.emit(f"Error reading file {filepath}: {e}")
+                self.logger.error(f"Error reading file {filepath}: {e}")
 
     def handle_download_button(self):
         if self.worker is not None and self.worker.isRunning():
             self.worker.stop()
             return
-        state_file = "tdl_state.json"
-        last_command_file = "tdl_last_command.json"
-        action_flag = None
-        if os.path.exists(state_file) and os.path.exists(last_command_file):
-            msg_box = QMessageBox(self)
-            msg_box.setIcon(QMessageBox.Icon.Question)
-            msg_box.setText("Incomplete Download Detected")
-            msg_box.setInformativeText("A previous download session seems to be incomplete. Would you like to resume it?")
-            resume_button = msg_box.addButton("Resume", QMessageBox.ButtonRole.YesRole)
-            restart_button = msg_box.addButton("Restart (from scratch)", QMessageBox.ButtonRole.DestructiveRole)
-            new_button = msg_box.addButton("Start New (deletes old state)", QMessageBox.ButtonRole.HelpRole)
-            msg_box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-            msg_box.exec()
-            clicked_button = msg_box.clickedButton()
-            if clicked_button == resume_button:
-                action_flag = '--continue'
-            elif clicked_button == restart_button:
-                action_flag = '--restart'
-            elif clicked_button == new_button:
-                try:
-                    if os.path.exists(state_file): os.remove(state_file)
-                    if os.path.exists(last_command_file): os.remove(last_command_file)
-                    self.log_message.emit("Cleared previous download state.")
-                except OSError as e:
-                    self.log_message.emit(f"[ERROR] Could not clear previous download state: {e}")
-                    return
+        source_text = self.source_input.toPlainText().strip()
+        if not source_text:
+            self.logger.error("Source input cannot be empty.")
+            return
+
+        command = [self.tdl_path, 'download']
+        lines = source_text.splitlines()
+        for line in lines:
+            clean_line = line.strip()
+            if not clean_line: continue
+            if clean_line.endswith('.json') and os.path.exists(clean_line):
+                command.extend(['-f', clean_line])
             else:
-                self.log_message.emit("Download cancelled by user.")
-                return
-        if action_flag:
-            try:
-                with open(last_command_file, 'r') as f:
-                    command = json.load(f)
-                command.append(action_flag)
-            except (OSError, json.JSONDecodeError) as e:
-                self.log_message.emit(f"[ERROR] Could not load last command for resume: {e}")
-                action_flag = None
-        if not action_flag:
-            source_text = self.source_input.toPlainText().strip()
-            if not source_text:
-                self.log_message.emit("Error: Source input cannot be empty.")
-                return
-            command = [self.tdl_path, 'dl']
-            lines = source_text.splitlines()
-            for line in lines:
-                clean_line = line.strip()
-                if not clean_line: continue
-                if clean_line.endswith('.json') and os.path.exists(clean_line):
-                    command.extend(['-f', clean_line])
-                else:
-                    command.extend(['-u', clean_line])
-            dest_path = self.dest_path_input.text().strip() or QDir.home().filePath("Downloads")
-            os.makedirs(dest_path, exist_ok=True)
-            command.extend(['-d', dest_path])
-            try:
-                with open(last_command_file, 'w') as f:
-                    json.dump(command, f)
-            except OSError as e:
-                self.log_message.emit(f"[ERROR] Could not save command for resume: {e}")
+                command.extend(['-u', clean_line])
+
+        dest_path = self.dest_path_input.text().strip() or QDir.home().filePath("Downloads")
+        os.makedirs(dest_path, exist_ok=True)
+        command.extend(['-d', dest_path])
         if self.advanced_group.isChecked():
             command.extend(['-l', str(self.concurrent_tasks_spinbox.value())])
             command.extend(['-t', str(self.threads_per_task_spinbox.value())])
@@ -701,7 +965,7 @@ class MainWindow(QMainWindow):
                 template_text = current_template.split(':', 1)[1].strip()
             if template_text:
                 command.extend(['--template', template_text])
-        if self.settings.get('debug_mode', False): command.append('--debug')
+        if self.settings_manager.get('debug_mode', False): command.append('--debug')
         delay_value = self.delay_spinbox.value()
         if delay_value > 0:
             delay_unit = self.delay_unit_combo.currentText()
@@ -711,18 +975,52 @@ class MainWindow(QMainWindow):
         command.extend(self._get_namespace_args())
         command.extend(self._get_ntp_args())
         command.extend(self._get_reconnect_timeout_args())
-        self.log_message.emit(f"Starting download with command: {' '.join(command)}")
-        timeout = self.settings.get('command_timeout', 300)
-        self.worker = Worker(command, self.tdl_path, timeout=timeout)
-        self.worker.logMessage.connect(self.append_log)
+        self.logger.info(f"Starting download with command: {' '.join(command)}")
+        timeout = self.settings_manager.get('command_timeout', 300)
+        self.worker = Worker(command, self.logger, timeout=timeout)
         self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
         self.worker.downloadStarted.connect(self.add_download_progress_widget)
         self.worker.downloadProgress.connect(self.update_download_progress)
         self.worker.downloadFinished.connect(self.remove_download_progress_widget)
         self.worker.overallProgress.connect(self.update_overall_progress)
         self.worker.statsUpdated.connect(self.update_system_stats)
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.has_started_download = True
         self.worker.start()
-        self.set_download_ui_state(is_downloading=True)
+        self.set_task_running_ui_state(is_running=True, tab_index=0)
+
+    def handle_resume_button(self):
+        if self.worker is not None and self.worker.isRunning():
+            self.logger.warning("A task is already running. Please wait.")
+            return
+
+        self.logger.info("Attempting to resume the last download...")
+        command = [self.tdl_path, 'download', '--continue']
+
+        if self.settings_manager.get('debug_mode', False): command.append('--debug')
+        command.extend(self._get_proxy_args())
+        command.extend(self._get_storage_args())
+        command.extend(self._get_namespace_args())
+        command.extend(self._get_ntp_args())
+        command.extend(self._get_reconnect_timeout_args())
+
+        self.logger.info(f"Starting resume with command: {' '.join(command)}")
+        timeout = self.settings_manager.get('command_timeout', 300)
+        self.worker = Worker(command, self.logger, timeout=timeout)
+        self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
+        self.worker.downloadStarted.connect(self.add_download_progress_widget)
+        self.worker.downloadProgress.connect(self.update_download_progress)
+        self.worker.downloadFinished.connect(self.remove_download_progress_widget)
+        self.worker.overallProgress.connect(self.update_overall_progress)
+        self.worker.statsUpdated.connect(self.update_system_stats)
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.has_started_download = True
+        self.worker.start()
+        self.set_task_running_ui_state(is_running=True, tab_index=0)
 
     def add_download_progress_widget(self, file_id):
         if file_id not in self.progress_widgets:
@@ -753,18 +1051,13 @@ class MainWindow(QMainWindow):
 
     def _task_finished(self, exit_code):
         if exit_code == 0:
-            self.log_message.emit("All tasks completed successfully.")
+            self.logger.info("All tasks completed successfully.")
             self.status_label.setText("Finished")
-            try:
-                if os.path.exists("tdl_state.json"): os.remove("tdl_state.json")
-                if os.path.exists("tdl_last_command.json"): os.remove("tdl_last_command.json")
-            except OSError as e:
-                self.log_message.emit(f"[ERROR] Could not clean up state files: {e}")
         else:
-            self.log_message.emit(f"A task failed or was terminated (Exit Code: {exit_code}).")
+            self.logger.warning(f"A task failed or was terminated (Exit Code: {exit_code}).")
             self.status_label.setText("Error / Stopped")
-        self.set_download_ui_state(is_downloading=False)
-        self.worker = None
+        self.set_task_running_ui_state(is_running=False)
+        # self.worker is set to None in _on_worker_finished to avoid race conditions
         for i in reversed(range(self.progress_layout.count())):
             item = self.progress_layout.itemAt(i)
             widget = item.widget()
@@ -772,9 +1065,12 @@ class MainWindow(QMainWindow):
                 widget.setParent(None)
                 widget.deleteLater()
         self.progress_widgets.clear()
-        # Add a stretch back to keep new items at the top
         self.progress_layout.addStretch()
 
+    def _on_worker_finished(self):
+        """Slot for when the worker thread has completely finished."""
+        self.logger.debug("Worker thread finished.")
+        self.worker = None
 
     def on_include_text_changed(self, text):
         self.exclude_ext_input.setEnabled(not bool(text))
@@ -782,33 +1078,54 @@ class MainWindow(QMainWindow):
     def on_exclude_text_changed(self, text):
         self.include_ext_input.setEnabled(not bool(text))
 
-    def _run_utility_command(self, config):
+    def _handle_export_chat_members(self, chat_id):
+        config = self.UTILITY_CONFIGS['export_members']
+        # Pre-fill the chat_id and let the user choose the output file
+        prefilled_values = {'chat_id': chat_id}
+        self._run_utility_command(config, prefilled_values)
+
+    def _run_utility_command(self, config, prefilled_values=None):
         if self.worker is not None and self.worker.isRunning():
-            self.log_message.emit("A task is already running. Please wait for it to complete.")
+            self.logger.warning("A task is already running. Please wait for it to complete.")
             return
-        dialog = UtilityDialog(config['title'], config['fields'], self)
-        if not dialog.exec():
-            self.log_message.emit(f"'{config['title']}' was cancelled.")
-            return
-        values = dialog.get_values()
+
+        values = {}
+        if prefilled_values:
+            values.update(prefilled_values)
+
+        # Determine which fields still need to be asked from the user
+        fields_to_ask = [
+            field for field in config['fields']
+            if field['name'] not in values
+        ]
+
+        if fields_to_ask:
+            dialog = UtilityDialog(config['title'], fields_to_ask, self)
+            if not dialog.exec():
+                self.logger.info(f"'{config['title']}' was cancelled.")
+                return
+            values.update(dialog.get_values())
+
         command = [self.tdl_path] + config['base_cmd']
         for field in config['fields']:
             value = values.get(field['name'])
             if value:
                 command.extend([field['arg'], value])
-        if self.settings.get('debug_mode', False): command.append('--debug')
+        if self.settings_manager.get('debug_mode', False): command.append('--debug')
         command.extend(self._get_proxy_args())
         command.extend(self._get_storage_args())
         command.extend(self._get_namespace_args())
         command.extend(self._get_ntp_args())
         command.extend(self._get_reconnect_timeout_args())
-        self.log_message.emit(f"Running utility: {' '.join(command)}")
-        timeout = self.settings.get('command_timeout', 300)
-        self.worker = Worker(command, self.tdl_path, timeout=timeout)
-        self.worker.logMessage.connect(self.append_log)
+        self.logger.info(f"Running utility: {' '.join(command)}")
+        timeout = self.settings_manager.get('command_timeout', 300)
+        self.worker = Worker(command, self.logger, timeout=timeout)
         self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
-        self.set_download_ui_state(is_downloading=True)
+        self.set_task_running_ui_state(is_running=True, tab_index=-1)
 
     def handle_export_button(self):
         if self.worker is not None and self.worker.isRunning():
@@ -820,36 +1137,46 @@ class MainWindow(QMainWindow):
             return
         output_path, _ = QFileDialog.getSaveFileName(self, "Save Exported JSON", QDir.homePath(), "JSON Files (*.json)")
         if not output_path:
-            self.log_message.emit("Export cancelled by user.")
+            self.logger.info("Export cancelled by user.")
             return
         command = [self.tdl_path, 'chat', 'export', '-c', source, '-o', output_path]
         export_type_index = self.export_type_combo.currentIndex()
-        if export_type_index == 1: # By Time Range
+        if export_type_index == 1:
             from_dt = QDateTime(self.from_date_edit.date())
-            to_dt = QDateTime(self.to_date_edit.date()).addDays(1).addSecs(-1) # End of day
+            to_dt = QDateTime(self.to_date_edit.date()).addDays(1).addSecs(-1)
             command.extend(['-T', 'time', '-i', f"{int(from_dt.toSecsSinceEpoch())},{int(to_dt.toSecsSinceEpoch())}"])
-        elif export_type_index == 2: # By ID Range
+        elif export_type_index == 2:
             from_id = self.from_id_input.text().strip() or "0"
             to_id = self.to_id_input.text().strip() or "0"
             command.extend(['-T', 'id', '-i', f"{from_id},{to_id}"])
-        elif export_type_index == 3: # Last N Messages
+        elif export_type_index == 3:
             n_messages = self.last_n_spinbox.value()
             command.extend(['-T', 'last', '-i', str(n_messages)])
         if self.export_with_content_checkbox.isChecked(): command.append('--with-content')
         if self.export_all_types_checkbox.isChecked(): command.append('--all')
-        if self.settings.get('debug_mode', False): command.append('--debug')
+
+        if self.export_advanced_group.isChecked():
+            if self.export_filter_input.text():
+                command.extend(['--filter', self.export_filter_input.text()])
+            if self.export_reply_input.text():
+                command.extend(['--reply', self.export_reply_input.text()])
+            if self.export_topic_input.text():
+                command.extend(['--topic', self.export_topic_input.text()])
+        if self.settings_manager.get('debug_mode', False): command.append('--debug')
         command.extend(self._get_proxy_args())
         command.extend(self._get_storage_args())
         command.extend(self._get_namespace_args())
         command.extend(self._get_ntp_args())
         command.extend(self._get_reconnect_timeout_args())
-        self.log_message.emit(f"Starting export with command: {' '.join(command)}")
-        timeout = self.settings.get('command_timeout', 300)
-        self.worker = Worker(command, self.tdl_path, timeout=timeout)
-        self.worker.logMessage.connect(self.append_log)
+        self.logger.info(f"Starting export with command: {' '.join(command)}")
+        timeout = self.settings_manager.get('command_timeout', 300)
+        self.worker = Worker(command, self.logger, timeout=timeout)
         self.worker.taskFinished.connect(self._task_finished)
+        self.worker.taskFailedWithLog.connect(self._task_failed)
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
-        self.set_download_ui_state(is_downloading=True)
+        self.set_task_running_ui_state(is_running=True, tab_index=1)
 
     def closeEvent(self, event):
         if self.worker is not None and self.worker.isRunning():
@@ -859,42 +1186,50 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def _get_proxy_args(self):
-        if self.settings.get('auto_proxy', True):
+        if self.settings_manager.get('auto_proxy', True):
             proxies = urllib.request.getproxies()
             proxy = proxies.get('https', proxies.get('http'))
             if proxy:
-                self.log_message.emit(f"Using system proxy: {proxy}")
+                self.logger.debug(f"Using system proxy: {proxy}")
                 return ['--proxy', proxy]
-        elif self.settings.get('manual_proxy', ''):
-            proxy = self.settings['manual_proxy']
-            self.log_message.emit(f"Using manual proxy: {proxy}")
+        elif self.settings_manager.get('manual_proxy', ''):
+            proxy = self.settings_manager.get('manual_proxy')
+            self.logger.debug(f"Using manual proxy: {proxy}")
             return ['--proxy', proxy]
         return []
 
     def _get_storage_args(self):
-        driver = self.settings.get('storage_driver', 'bolt')
-        path = self.settings.get('storage_path', '').strip()
+        driver = self.settings_manager.get('storage_driver', 'bolt')
+        path = self.settings_manager.get('storage_path', '').strip()
         if not path:
             return []
         storage_str = f"type={driver},path={path}"
         return ['--storage', storage_str]
 
     def _get_namespace_args(self):
-        namespace = self.settings.get('namespace', 'default')
+        namespace = self.settings_manager.get('namespace', 'default')
         if namespace and namespace != 'default':
             return ['--ns', namespace]
         return []
 
     def _get_ntp_args(self):
-        """Returns NTP server arguments if set."""
-        ntp_server = self.settings.get('ntp_server', '').strip()
+        ntp_server = self.settings_manager.get('ntp_server', '').strip()
         if ntp_server:
             return ['--ntp', ntp_server]
         return []
 
     def _get_reconnect_timeout_args(self):
-        """Returns reconnect timeout arguments if set."""
-        reconnect_timeout = self.settings.get('reconnect_timeout', '5m').strip()
+        reconnect_timeout = self.settings_manager.get('reconnect_timeout', '5m').strip()
         if reconnect_timeout and reconnect_timeout != '5m' and reconnect_timeout != '0s':
             return ['--reconnect-timeout', reconnect_timeout]
         return []
+
+    def _task_failed(self, log_output):
+        self.logger.error("A task failed. See full log in the Log tab or app.log file.")
+        if "not authorized" in log_output:
+            QMessageBox.warning(
+                self,
+                "Authentication Required",
+                "The operation failed because you are not logged in.\n\n"
+                "Please go to Tools > Settings and use the 'Login to New Account' button to log in."
+            )

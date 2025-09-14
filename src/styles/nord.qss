@@ -1,0 +1,340 @@
+/* Nord Theme - Enhanced */
+/* Uses official Nord palette with improved consistency and readability */
+
+QWidget {
+    background-color: #2E3440; /* nord0 */
+    color: #D8DEE9; /* nord4 */
+    font-size: 14px;
+    font-family: "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+}
+
+QMainWindow, QDialog {
+    background-color: #2E3440; /* nord0 */
+}
+
+/* Labels and static text */
+QLabel {
+    color: #D8DEE9; /* nord4 */
+    background-color: transparent;
+}
+
+QLabel:disabled {
+    color: #4C566A; /* nord3 */
+}
+
+/* Group boxes */
+QGroupBox {
+    background-color: #3B4252; /* nord1 */
+    border: 1px solid #434C5E; /* nord2 */
+    border-radius: 5px;
+    margin-top: 1ex;
+    padding-top: 1ex;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+    color: #88C0D0; /* nord8 - cyan for headers */
+}
+
+/* Input widgets */
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit, QTimeEdit, QDateTimeEdit {
+    padding: 5px 8px;
+    border: 1px solid #434C5E; /* nord2 */
+    border-radius: 4px;
+    background-color: #3B4252; /* nord1 */
+    color: #ECEFF4; /* nord6 */
+    selection-background-color: #88C0D0; /* nord8 */
+    selection-color: #2E3440; /* nord0 */
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, 
+QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, 
+QTimeEdit:focus, QDateTimeEdit:focus {
+    border: 2px solid #88C0D0; /* nord8 - cyan focus */
+    background-color: #434C5E; /* nord2 - slightly lighter on focus */
+}
+
+QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled,
+QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background-color: #2E3440; /* nord0 */
+    color: #4C566A; /* nord3 */
+    border-color: #3B4252; /* nord1 */
+}
+
+/* Combo boxes */
+QComboBox {
+    padding: 5px 8px;
+    border: 1px solid #434C5E; /* nord2 */
+    border-radius: 4px;
+    background-color: #3B4252; /* nord1 */
+    color: #ECEFF4; /* nord6 */
+    min-width: 75px;
+}
+
+QComboBox:focus {
+    border: 2px solid #88C0D0; /* nord8 */
+    background-color: #434C5E; /* nord2 */
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #D8DEE9; /* nord4 */
+    margin-right: 5px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #3B4252; /* nord1 */
+    border: 1px solid #434C5E; /* nord2 */
+    selection-background-color: #88C0D0; /* nord8 */
+    selection-color: #2E3440; /* nord0 */
+    color: #ECEFF4; /* nord6 */
+}
+
+/* Buttons */
+QPushButton, QToolButton {
+    background-color: #5E81AC; /* nord10 */
+    color: #ECEFF4; /* nord6 */
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-weight: bold;
+    border: none;
+    min-width: 80px;
+}
+
+QToolButton {
+    padding: 4px;
+    min-width: 0;
+}
+
+QPushButton:hover, QToolButton:hover {
+    background-color: #81A1C1; /* nord9 */
+}
+
+QPushButton:pressed, QToolButton:pressed {
+    background-color: #4C566A; /* nord3 */
+}
+
+QPushButton:disabled, QToolButton:disabled {
+    background-color: #3B4252; /* nord1 */
+    color: #4C566A; /* nord3 */
+}
+
+QPushButton:default {
+    background-color: #88C0D0; /* nord8 - cyan for default */
+}
+
+QPushButton[class="stop-button"], QPushButton#stopButton {
+    background-color: #BF616A; /* nord11 */
+}
+
+QPushButton[class="stop-button"]:hover, QPushButton#stopButton:hover {
+    background-color: #D08770; /* nord12 */
+}
+
+/* Check boxes and radio buttons */
+QCheckBox, QRadioButton {
+    spacing: 5px;
+    color: #D8DEE9; /* nord4 */
+}
+
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #434C5E; /* nord2 */
+    background-color: #3B4252; /* nord1 */
+}
+
+QCheckBox::indicator:checked {
+    background-color: #88C0D0; /* nord8 */
+    border-color: #88C0D0;
+}
+
+QRadioButton::indicator {
+    border-radius: 9px;
+}
+
+QRadioButton::indicator:checked {
+    background-color: #88C0D0; /* nord8 */
+    border-color: #88C0D0;
+}
+
+/* Progress bars */
+QProgressBar {
+    border: 1px solid #434C5E; /* nord2 */
+    border-radius: 5px;
+    text-align: center;
+    background-color: #3B4252; /* nord1 */
+    color: #ECEFF4; /* nord6 */
+    min-height: 20px;
+}
+
+QProgressBar::chunk {
+    background-color: #88C0D0; /* nord8 */
+    border-radius: 4px;
+}
+
+/* Tabs */
+QTabWidget::pane {
+    border: 1px solid #434C5E; /* nord2 */
+    background-color: #2E3440; /* nord0 */
+}
+
+QTabBar::tab {
+    background-color: #3B4252; /* nord1 */
+    border: 1px solid #434C5E; /* nord2 */
+    padding: 8px 12px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background-color: #2E3440; /* nord0 */
+    border-bottom-color: #2E3440;
+    color: #88C0D0; /* nord8 */
+}
+
+QTabBar::tab:!selected:hover {
+    background-color: #434C5E; /* nord2 */
+}
+
+/* Lists and trees */
+QListView, QTreeView, QTableView {
+    background-color: #3B4252; /* nord1 */
+    border: 1px solid #434C5E; /* nord2 */
+    color: #ECEFF4; /* nord6 */
+    selection-background-color: #88C0D0; /* nord8 */
+    selection-color: #2E3440; /* nord0 */
+    outline: none;
+}
+
+QListView::item, QTreeView::item, QTableView::item {
+    padding: 4px;
+    border: none;
+}
+
+QListView::item:hover, QTreeView::item:hover, QTableView::item:hover {
+    background-color: #434C5E; /* nord2 */
+}
+
+QListView::item:selected, QTreeView::item:selected, QTableView::item:selected {
+    background-color: #88C0D0; /* nord8 */
+    color: #2E3440; /* nord0 */
+}
+
+QHeaderView::section {
+    background-color: #3B4252; /* nord1 */
+    color: #D8DEE9; /* nord4 */
+    padding: 4px;
+    border: 1px solid #434C5E; /* nord2 */
+    font-weight: bold;
+}
+
+/* Scroll bars */
+QScrollBar:vertical, QScrollBar:horizontal {
+    background-color: #2E3440; /* nord0 */
+    border: none;
+}
+
+QScrollBar:vertical {
+    width: 14px;
+}
+
+QScrollBar:horizontal {
+    height: 14px;
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background-color: #4C566A; /* nord3 */
+    border-radius: 7px;
+    min-height: 30px;
+    min-width: 30px;
+}
+
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
+    background-color: #5E81AC; /* nord10 */
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    border: none;
+    background: none;
+}
+
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: none;
+}
+
+/* Menus */
+QMenuBar {
+    background-color: #2E3440; /* nord0 */
+    color: #D8DEE9; /* nord4 */
+}
+
+QMenuBar::item:selected {
+    background-color: #3B4252; /* nord1 */
+}
+
+QMenu {
+    background-color: #3B4252; /* nord1 */
+    border: 1px solid #434C5E; /* nord2 */
+    color: #D8DEE9; /* nord4 */
+}
+
+QMenu::item:selected {
+    background-color: #88C0D0; /* nord8 */
+    color: #2E3440; /* nord0 */
+}
+
+/* Tool tips */
+QToolTip {
+    background-color: #3B4252; /* nord1 */
+    border: 1px solid #434C5E; /* nord2 */
+    color: #ECEFF4; /* nord6 */
+    padding: 4px;
+}
+
+/* Status bar */
+QStatusBar {
+    background-color: #2E3440; /* nord0 */
+    color: #D8DEE9; /* nord4 */
+}
+
+/* Sliders */
+QSlider::groove:horizontal {
+    border: 1px solid #434C5E; /* nord2 */
+    height: 8px;
+    background-color: #3B4252; /* nord1 */
+    border-radius: 4px;
+}
+
+QSlider::handle:horizontal {
+    background-color: #88C0D0; /* nord8 */
+    border: 1px solid #88C0D0;
+    width: 18px;
+    margin: -5px 0;
+    border-radius: 9px;
+}
+
+QSlider::handle:horizontal:hover {
+    background-color: #8FBCBB; /* nord7 */
+}
+
+/* Special styling for log/console widgets */
+QPlainTextEdit[readOnly="true"], QTextEdit[readOnly="true"],
+QPlainTextEdit#logWidget, QTextEdit#logWidget,
+QPlainTextEdit.log-widget, QTextEdit.log-widget {
+    background-color: #2E3440; /* nord0 - darker for logs */
+    color: #ECEFF4; /* nord6 - brighter text for readability */
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
+    font-size: 13px;
+    border: 1px solid #434C5E; /* nord2 */
+}
