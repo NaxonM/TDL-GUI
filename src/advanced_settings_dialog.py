@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QCheckBox, QComboBox, QDialogButtonBox, QHBoxLayout, QToolButton,
     QGroupBox
 )
+from functools import partial
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QAbstractSpinBox, QStyle
