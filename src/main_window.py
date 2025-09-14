@@ -25,6 +25,8 @@ from utility_dialog import UtilityDialog
 from progress_widget import DownloadProgressWidget
 from settings_manager import SettingsManager
 from logger import Logger
+from advanced_settings_dialog import AdvancedSettingsDialog
+from advanced_export_dialog import AdvancedExportDialog
 
 class MainWindow(QMainWindow):
     # Configuration for utility commands
@@ -80,6 +82,8 @@ class MainWindow(QMainWindow):
         self.has_started_download = False
         self.active_task_tab_index = -1
         self.original_tab_text = ""
+        self.advanced_settings = {}
+        self.advanced_export_settings = {}
 
         if self.theme == 'dark':
             self.error_color = QColor("#FF5555")
@@ -106,12 +110,24 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self):
         """Initializes the main UI components."""
-        self.setWindowTitle("tdl GUI")
-        self.setGeometry(100, 100, 850, 700)
+        self._init_window()
+        self._create_central_widget()
+        self._create_menu_bar()
+        self._create_status_bar()
+        self._update_namespace_display()
+        self._collect_global_controls()
 
+    def _init_window(self):
+        """Initializes main window properties."""
+        self.setWindowTitle("tdl GUI")
+        self.resize(850, 700)  # Set a default size, but allow resizing
+
+    def _create_central_widget(self):
+        """Creates and sets up the central tab widget."""
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
+        # Create and add tabs
         self.download_tab = self._create_download_tab()
         self.export_tab = self._create_export_tab()
         self.chats_tab = self._create_chats_tab()
@@ -122,10 +138,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.chats_tab, "Chats")
         self.tabs.addTab(self.log_tab, "Log")
 
-        self._create_menu_bar()
-        self._create_status_bar()
-        self._update_namespace_display()
-
+    def _collect_global_controls(self):
+        """Collects all controls that should be disabled when a task is running."""
         self.global_controls.extend([
             self.refresh_chats_button,
             self.chats_table,
@@ -144,10 +158,6 @@ class MainWindow(QMainWindow):
         self.load_from_file_button.clicked.connect(self.load_source_from_file)
         self.browse_dest_button.clicked.connect(self.select_destination_directory)
         self.clear_source_button.clicked.connect(self.source_input.clear)
-        self.template_combo.currentTextChanged.connect(self._on_template_change)
-        self.include_ext_input.textChanged.connect(self.on_include_text_changed)
-        self.exclude_ext_input.textChanged.connect(self.on_exclude_text_changed)
-        self.advanced_group.toggled.connect(lambda checked: self.advanced_tabs.setVisible(checked))
         # Export Tab Connections
         self.run_export_button.clicked.connect(self.handle_export_button)
         self.export_type_combo.currentIndexChanged.connect(self.filter_stack.setCurrentIndex)
@@ -160,7 +170,6 @@ class MainWindow(QMainWindow):
 
         source_group = self._create_download_source_group()
         dest_group = self._create_download_destination_group()
-        self.advanced_group = self._create_download_advanced_group()
         progress_group = self._create_download_progress_group()
 
         self.start_download_button = QPushButton("Start Download")
@@ -169,21 +178,24 @@ class MainWindow(QMainWindow):
         self.resume_download_button.setObjectName("ActionButton")
         self.resume_download_button.setEnabled(False)
 
+        self.advanced_settings_button = QPushButton("Advanced Options...")
+        self.advanced_settings_button.clicked.connect(self.open_advanced_settings_dialog)
+
         action_button_layout = QHBoxLayout()
         action_button_layout.addStretch()
+        action_button_layout.addWidget(self.advanced_settings_button)
         action_button_layout.addWidget(self.start_download_button)
         action_button_layout.addWidget(self.resume_download_button)
         action_button_layout.addStretch()
 
         main_layout.addWidget(source_group)
         main_layout.addWidget(dest_group)
-        main_layout.addWidget(self.advanced_group)
         main_layout.addLayout(action_button_layout)
         main_layout.addWidget(progress_group)
 
         self.download_controls.extend([
             self.source_input, self.load_from_file_button, self.clear_source_button,
-            self.dest_path_input, self.browse_dest_button, self.advanced_group
+            self.dest_path_input, self.browse_dest_button, self.advanced_settings_button
         ])
         return widget
 
@@ -226,137 +238,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.browse_dest_button)
         return group
 
-    def _create_download_advanced_group(self):
-        group = QGroupBox("Advanced Options")
-        group.setCheckable(True)
-        group.setChecked(False)
-        group_layout = QVBoxLayout(group)
-        
-        self.advanced_tabs = QTabWidget()
-        general_tab = self._create_adv_general_tab()
-        filters_naming_tab = self._create_adv_filters_naming_tab()
-        
-        self.advanced_tabs.addTab(general_tab, "General")
-        self.advanced_tabs.addTab(filters_naming_tab, "Filters & Naming")
-        self.advanced_tabs.setVisible(False)
-        
-        group_layout.addWidget(self.advanced_tabs)
-        return group
+    def open_advanced_settings_dialog(self):
+        dialog = AdvancedSettingsDialog(self)
+        if dialog.exec():
+            self.advanced_settings = dialog.get_settings()
+            self.logger.info("Advanced settings saved.")
+        else:
+            self.logger.info("Advanced settings dialog cancelled.")
 
-    def _create_adv_general_tab(self):
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(5, 10, 5, 5)
-
-        col1_layout = QVBoxLayout()
-        concurrency_group = QGroupBox("Concurrency")
-        concurrency_form = QFormLayout(concurrency_group)
-        tasks_widget, self.concurrent_tasks_spinbox = self._create_spinbox_with_arrows(1, 16, 2)
-        self.concurrent_tasks_spinbox.setToolTip("Set the maximum number of files to download at the same time.")
-        threads_widget, self.threads_per_task_spinbox = self._create_spinbox_with_arrows(1, 16, 4)
-        self.threads_per_task_spinbox.setToolTip("Set the maximum number of parallel connections for a single file.")
-        concurrency_form.addRow("Concurrent Tasks:", tasks_widget)
-        concurrency_form.addRow("Threads per Task:", threads_widget)
-        col1_layout.addWidget(concurrency_group)
-        
-        pool_group = QGroupBox("Connection")
-        pool_form = QFormLayout(pool_group)
-        pool_widget, self.pool_spinbox = self._create_spinbox_with_arrows(0, 100, 8)
-        self.pool_spinbox.setToolTip("Advanced: The size of the DC pool for the Telegram client.\nLeave at 8 unless you have connection issues.")
-        pool_form.addRow("DC Pool Size:", pool_widget)
-        col1_layout.addWidget(pool_group)
-
-        delay_group = QGroupBox("Rate Limiting")
-        delay_form = QFormLayout(delay_group)
-        delay_layout = QHBoxLayout()
-        delay_widget, self.delay_spinbox = self._create_spinbox_with_arrows(0, 99999, 0)
-        self.delay_spinbox.setToolTip("Wait a specified amount of time between download tasks to avoid API rate limits.")
-        self.delay_unit_combo = QComboBox()
-        self.delay_unit_combo.addItems(["ms", "s", "m"])
-        delay_layout.addWidget(delay_widget, 1)
-        delay_layout.addWidget(self.delay_unit_combo)
-        delay_form.addRow("Delay per Task:", delay_layout)
-        col1_layout.addWidget(delay_group)
-        col1_layout.addStretch()
-
-        col2_layout = QVBoxLayout()
-        flags_group = QGroupBox("Behavioral Flags")
-        flags_layout = QVBoxLayout(flags_group)
-        self.desc_checkbox = QCheckBox("Download in descending order")
-        self.desc_checkbox.setToolTip("Download files from newest to oldest instead of the default (oldest to newest).")
-        self.skip_same_checkbox = QCheckBox("Skip identical files")
-        self.skip_same_checkbox.setToolTip("If a file with the same name and size already exists in the destination, skip it.")
-        self.skip_same_checkbox.setChecked(True)
-        self.rewrite_ext_checkbox = QCheckBox("Rewrite file extension")
-        self.rewrite_ext_checkbox.setToolTip("Renames the file extension based on its actual content type (MIME type).")
-        self.group_checkbox = QCheckBox("Auto-download albums/groups")
-        self.group_checkbox.setToolTip("If a message link points to a file in an album, download all other files in that album automatically.")
-        self.takeout_checkbox = QCheckBox("Use takeout session (lowers limits)")
-        self.takeout_checkbox.setToolTip("Use a special session type that is less prone to API rate limits.\nUseful for very large downloads.")
-        flags = [self.desc_checkbox, self.skip_same_checkbox, self.rewrite_ext_checkbox, self.group_checkbox, self.takeout_checkbox]
-        for flag in flags:
-            flags_layout.addWidget(flag)
-        flags_layout.addStretch()
-        col2_layout.addWidget(flags_group)
-
-        layout.addLayout(col1_layout, 1)
-        layout.addLayout(col2_layout, 1)
-        return widget
-
-    def _create_adv_filters_naming_tab(self):
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(5, 10, 5, 5)
-
-        filters_group = QGroupBox("File Filters")
-        filters_form = QFormLayout(filters_group)
-        self.include_ext_input = QLineEdit()
-        self.include_ext_input.setPlaceholderText("e.g., mp4,mkv,zip")
-        self.include_ext_input.setToolTip("Only download files with these extensions. Cannot be used with Exclude.")
-        self.exclude_ext_input = QLineEdit()
-        self.exclude_ext_input.setPlaceholderText("e.g., jpg,png,gif")
-        self.exclude_ext_input.setToolTip("Do not download files with these extensions. Cannot be used with Include.")
-        filters_form.addRow("Include Exts:", self.include_ext_input)
-        filters_form.addRow("Exclude Exts:", self.exclude_ext_input)
-        layout.addWidget(filters_group)
-
-        template_group = QGroupBox("Filename Template")
-        template_v_layout = QVBoxLayout(template_group)
-        template_h_layout = QHBoxLayout()
-        self.template_combo = QComboBox()
-        self.template_combo.addItems(["Default: {{ .DialogID }}_{{ .MessageID }}_{{ filenamify .FileName }}", "{{ .DialogID }}/{{ .FileName }}", "{{ .MessageID }}-{{ .FileName }}", "{{ .FileName }}", "Custom..."])
-        self.template_input = QLineEdit()
-        self.template_input.setPlaceholderText("Enter custom template...")
-        self.template_input.setVisible(False)
-        template_help_button = QToolButton()
-        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxQuestion)
-        template_help_button.setIcon(icon)
-        template_help_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://docs.iyear.me/tdl/guide/template/")))
-        template_h_layout.addWidget(self.template_combo, 1)
-        template_h_layout.addWidget(self.template_input, 1)
-        template_h_layout.addWidget(template_help_button)
-        template_v_layout.addLayout(template_h_layout)
-
-        self.placeholder_widget = self._create_template_placeholders()
-        self.placeholder_widget.setVisible(False)
-        template_v_layout.addWidget(self.placeholder_widget)
-        
-        layout.addWidget(template_group)
-        layout.addStretch()
-        return widget
-
-    def _create_template_placeholders(self):
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 5, 0, 0)
-        placeholders = ["FileName", "MessageID", "DialogID", "FileSize", "Ext", "Date", "Time"]
-        for placeholder in placeholders:
-            button = QToolButton()
-            button.setText(f"{{{placeholder}}}")
-            button.clicked.connect(partial(self.insert_template_placeholder, placeholder))
-            layout.addWidget(button)
-        layout.addStretch()
-        return widget
 
     def _create_download_progress_group(self):
         group = QGroupBox("Live Downloads")
@@ -385,17 +274,18 @@ class MainWindow(QMainWindow):
         self.run_export_button = QPushButton("Export to JSON...")
         self.run_export_button.setObjectName("ActionButton")
 
-        self.export_advanced_group = self._create_export_advanced_group()
+        self.advanced_export_button = QPushButton("Advanced Options...")
+        self.advanced_export_button.clicked.connect(self.open_advanced_export_dialog)
 
         action_button_layout = QHBoxLayout()
         action_button_layout.addStretch()
+        action_button_layout.addWidget(self.advanced_export_button)
         action_button_layout.addWidget(self.run_export_button)
         action_button_layout.addStretch()
 
         main_layout.addWidget(source_group)
         main_layout.addWidget(options_group)
         main_layout.addWidget(content_group)
-        main_layout.addWidget(self.export_advanced_group)
         main_layout.addLayout(action_button_layout)
         main_layout.addStretch()
 
@@ -467,36 +357,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.export_all_types_checkbox)
         return group
     
-    def _create_export_advanced_group(self):
-        group = QGroupBox("Advanced Filtering")
-        group.setCheckable(True)
-        group.setChecked(False)
-
-        form_layout = QFormLayout()
-        self.export_filter_input = QLineEdit()
-        self.export_filter_input.setPlaceholderText("e.g., 'IsPhoto && HasViews'")
-        self.export_filter_input.setToolTip("Filter messages using a powerful expression.\nSee tdl documentation for syntax.")
-        self.export_reply_input = QLineEdit()
-        self.export_reply_input.setPlaceholderText("Export replies to a specific message ID")
-        self.export_reply_input.setToolTip("Only export messages that are replies to this specific message ID.")
-        self.export_topic_input = QLineEdit()
-        self.export_topic_input.setPlaceholderText("Export from a specific topic/forum ID")
-        self.export_topic_input.setToolTip("For groups with Topics enabled, export messages from a specific topic ID.")
-
-        form_layout.addRow("Filter Expression:", self.export_filter_input)
-        form_layout.addRow("Replies to Message ID:", self.export_reply_input)
-        form_layout.addRow("Topic ID:", self.export_topic_input)
-
-        container_widget = QWidget()
-        container_widget.setLayout(form_layout)
-        container_widget.setVisible(False)
-
-        group_layout = QVBoxLayout(group)
-        group_layout.addWidget(container_widget)
-
-        group.toggled.connect(container_widget.setVisible)
-
-        return group
+    def open_advanced_export_dialog(self):
+        dialog = AdvancedExportDialog(self)
+        if dialog.exec():
+            self.advanced_export_settings = dialog.get_settings()
+            self.logger.info("Advanced export settings saved.")
+        else:
+            self.logger.info("Advanced export settings dialog cancelled.")
 
     def _create_log_tab(self):
         widget = QWidget()
@@ -579,24 +446,6 @@ class MainWindow(QMainWindow):
         namespace = self.settings_manager.get('namespace', 'default')
         self.namespace_label.setText(f"NS: {namespace}")
 
-    def _create_spinbox_with_arrows(self, min_val, max_val, default_val):
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-
-        spinbox = QSpinBox()
-        spinbox.setRange(min_val, max_val)
-        spinbox.setValue(default_val)
-        spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-
-        up_button = QToolButton(arrowType=Qt.ArrowType.UpArrow, clicked=spinbox.stepUp)
-        down_button = QToolButton(arrowType=Qt.ArrowType.DownArrow, clicked=spinbox.stepDown)
-        
-        layout.addWidget(spinbox, 1)
-        layout.addWidget(down_button)
-        layout.addWidget(up_button)
-        return container, spinbox
 
     def set_task_running_ui_state(self, is_running, tab_index=-1):
         """Enables or disables UI controls based on the state of a running task."""
@@ -731,19 +580,6 @@ class MainWindow(QMainWindow):
             self.logger.error("Failed to parse JSON data from 'tdl chat ls' command.")
             QMessageBox.critical(self, "Error", "Could not parse the chat list from tdl. See logs for details.")
 
-    def _on_template_change(self, text):
-        is_custom = (text == "Custom...")
-        self.template_input.setVisible(is_custom)
-        self.placeholder_widget.setVisible(is_custom)
-
-    def insert_template_placeholder(self, placeholder):
-        self.template_combo.setCurrentText("Custom...")
-        self.template_input.setFocus()
-        cursor_pos = self.template_input.cursorPosition()
-        current_text = self.template_input.text()
-        new_text = f"{current_text[:cursor_pos]}{{{{ .{placeholder} }}}}{current_text[cursor_pos:]}"
-        self.template_input.setText(new_text)
-        self.template_input.setCursorPosition(cursor_pos + len(f"{{{{ .{placeholder} }}}}"))
 
     def append_log(self, message, level):
         cursor = self.log_output.textCursor()
@@ -946,30 +782,33 @@ class MainWindow(QMainWindow):
         dest_path = self.dest_path_input.text().strip() or QDir.home().filePath("Downloads")
         os.makedirs(dest_path, exist_ok=True)
         command.extend(['-d', dest_path])
-        if self.advanced_group.isChecked():
-            command.extend(['-l', str(self.concurrent_tasks_spinbox.value())])
-            command.extend(['-t', str(self.threads_per_task_spinbox.value())])
-            if self.include_ext_input.text(): command.extend(['-i', self.include_ext_input.text()])
-            if self.exclude_ext_input.text(): command.extend(['-e', self.exclude_ext_input.text()])
-            if self.desc_checkbox.isChecked(): command.append('--desc')
-            if self.skip_same_checkbox.isChecked(): command.append('--skip-same')
-            if self.rewrite_ext_checkbox.isChecked(): command.append('--rewrite-ext')
-            if self.group_checkbox.isChecked(): command.append('--group')
-            if self.takeout_checkbox.isChecked(): command.append('--takeout')
-            command.extend(['--pool', str(self.pool_spinbox.value())])
-            template_text = ""
-            current_template = self.template_combo.currentText()
-            if current_template == "Custom...":
-                template_text = self.template_input.text()
-            elif ':' in current_template:
-                template_text = current_template.split(':', 1)[1].strip()
-            if template_text:
-                command.extend(['--template', template_text])
+
+        if self.advanced_settings:
+            command.extend(['-l', str(self.advanced_settings['concurrent_tasks'])])
+            command.extend(['-t', str(self.advanced_settings['threads_per_task'])])
+            if self.advanced_settings['include_exts']:
+                command.extend(['-i', self.advanced_settings['include_exts']])
+            if self.advanced_settings['exclude_exts']:
+                command.extend(['-e', self.advanced_settings['exclude_exts']])
+            if self.advanced_settings['desc_order']:
+                command.append('--desc')
+            if self.advanced_settings['skip_same']:
+                command.append('--skip-same')
+            if self.advanced_settings['rewrite_ext']:
+                command.append('--rewrite-ext')
+            if self.advanced_settings['group_albums']:
+                command.append('--group')
+            if self.advanced_settings['use_takeout']:
+                command.append('--takeout')
+            command.extend(['--pool', str(self.advanced_settings['pool_size'])])
+            if self.advanced_settings['template']:
+                command.extend(['--template', self.advanced_settings['template']])
+            delay_value = self.advanced_settings['delay']
+            if delay_value > 0:
+                delay_unit = self.advanced_settings['delay_unit']
+                command.extend(['--delay', f"{delay_value}{delay_unit}"])
+
         if self.settings_manager.get('debug_mode', False): command.append('--debug')
-        delay_value = self.delay_spinbox.value()
-        if delay_value > 0:
-            delay_unit = self.delay_unit_combo.currentText()
-            command.extend(['--delay', f"{delay_value}{delay_unit}"])
         command.extend(self._get_proxy_args())
         command.extend(self._get_storage_args())
         command.extend(self._get_namespace_args())
@@ -1155,13 +994,14 @@ class MainWindow(QMainWindow):
         if self.export_with_content_checkbox.isChecked(): command.append('--with-content')
         if self.export_all_types_checkbox.isChecked(): command.append('--all')
 
-        if self.export_advanced_group.isChecked():
-            if self.export_filter_input.text():
-                command.extend(['--filter', self.export_filter_input.text()])
-            if self.export_reply_input.text():
-                command.extend(['--reply', self.export_reply_input.text()])
-            if self.export_topic_input.text():
-                command.extend(['--topic', self.export_topic_input.text()])
+        if self.advanced_export_settings:
+            if self.advanced_export_settings['filter']:
+                command.extend(['--filter', self.advanced_export_settings['filter']])
+            if self.advanced_export_settings['reply']:
+                command.extend(['--reply', self.advanced_export_settings['reply']])
+            if self.advanced_export_settings['topic']:
+                command.extend(['--topic', self.advanced_export_settings['topic']])
+
         if self.settings_manager.get('debug_mode', False): command.append('--debug')
         command.extend(self._get_proxy_args())
         command.extend(self._get_storage_args())
