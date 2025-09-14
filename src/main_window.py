@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
         self.export_controls.extend([
             self.export_source_input, self.export_type_combo, self.filter_stack,
             self.export_with_content_checkbox, self.export_all_types_checkbox,
-            self.export_advanced_group
+            self.advanced_export_button
         ])
         return widget
         
