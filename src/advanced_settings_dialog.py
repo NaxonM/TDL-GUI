@@ -1,8 +1,10 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout, QLineEdit,
-    QSpinBox, QCheckBox, QComboBox, QDialogButtonBox, QHBoxLayout, QToolButton
+    QSpinBox, QCheckBox, QComboBox, QDialogButtonBox, QHBoxLayout, QToolButton,
+    QGroupBox
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QAbstractSpinBox, QStyle
 
 
