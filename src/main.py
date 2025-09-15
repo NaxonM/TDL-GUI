@@ -1,10 +1,10 @@
 import sys
 import os
-from src.tdl_manager import TdlManager
-from src.worker import InitialSetupWorker
-from src.settings_manager import SettingsManager
-from src.logger import initialize_logger
-from src.theme_manager import ThemeManager
+from .tdl_manager import TdlManager
+from .worker import InitialSetupWorker
+from .settings_manager import SettingsManager
+from .logger import initialize_logger
+from .theme_manager import ThemeManager
 
 # --- UI Imports ---
 from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog

@@ -20,10 +20,10 @@ from PyQt6.QtWidgets import (
     QLabel,
 )
 from PyQt6.QtCore import QDir, pyqtSignal
-from src.login_dialog import LoginDialog
-from src.qr_code_dialog import QRCodeDialog
-from src.settings_manager import SettingsManager
-from src.theme_manager import ThemeManager
+from .login_dialog import LoginDialog
+from .qr_code_dialog import QRCodeDialog
+from .settings_manager import SettingsManager
+from .theme_manager import ThemeManager
 
 
 class SettingsDialog(QDialog):
