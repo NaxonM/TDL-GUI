@@ -1,7 +1,8 @@
 import os
 
+
 class ThemeManager:
-    def __init__(self, styles_dir='src/styles'):
+    def __init__(self, styles_dir="src/styles"):
         self.styles_dir = styles_dir
         self.themes = self._discover_themes()
 
@@ -11,7 +12,7 @@ class ThemeManager:
             return themes
 
         for filename in os.listdir(self.styles_dir):
-            if filename.endswith('.qss'):
+            if filename.endswith(".qss"):
                 theme_name = os.path.splitext(filename)[0]
                 themes[theme_name] = os.path.join(self.styles_dir, filename)
         return themes
@@ -25,7 +26,7 @@ class ThemeManager:
 
         filepath = self.themes[theme_name]
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 return f.read()
         except FileNotFoundError:
             return ""

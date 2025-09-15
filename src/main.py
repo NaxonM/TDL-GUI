@@ -1,23 +1,21 @@
 import sys
-import os
-from tdl_manager import TdlManager
-from worker import InitialSetupWorker
-from settings_manager import SettingsManager
-from logger import initialize_logger
-from theme_manager import ThemeManager
+from src.tdl_manager import TdlManager
+from src.worker import InitialSetupWorker
+from src.settings_manager import SettingsManager
+from src.logger import initialize_logger
+from src.theme_manager import ThemeManager
 
 # --- UI Imports ---
 from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
-from PyQt6.QtGui import QPalette
 from PyQt6.QtCore import Qt, QTimer
 
 
 class AppController:
-    def __init__(self, app):
+    def __init__(self, app, settings_manager, theme_name="light"):
         self.app = app
+        self.settings_manager = settings_manager
+        self.theme_name = theme_name
         self.main_window = None
-        self.theme_name = 'light'
-        self.settings_manager = SettingsManager()
         self.logger = initialize_logger(self.settings_manager)
 
     def start(self):
@@ -25,22 +23,25 @@ class AppController:
         self.manager = TdlManager()
         tdl_path, status = self.manager.check_for_tdl()
 
-        if status == 'not_found':
+        if status == "not_found":
             self.run_initial_setup()
         else:
             self.launch_main_window(tdl_path)
 
     def run_initial_setup(self):
         reply = QMessageBox.information(
-            None, "TDL Not Found",
+            None,
+            "TDL Not Found",
             "The 'tdl' command-line tool was not found.\nA local copy will be downloaded automatically.",
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Ok
+            QMessageBox.StandardButton.Ok,
         )
         if reply == QMessageBox.StandardButton.Cancel:
             sys.exit(0)
 
-        self.progress_dialog = QProgressDialog("Downloading tdl...", "Cancel", 0, 100, None)
+        self.progress_dialog = QProgressDialog(
+            "Downloading tdl...", "Cancel", 0, 100, None
+        )
         self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.setWindowTitle("Setup")
 
@@ -57,29 +58,34 @@ class AppController:
         if total > 0:
             self.progress_dialog.setMaximum(total)
             self.progress_dialog.setValue(current)
-        else: # Show a busy indicator if total size is unknown
+        else:  # Show a busy indicator if total size is unknown
             self.progress_dialog.setMaximum(0)
             self.progress_dialog.setValue(0)
 
     def on_setup_success(self, tdl_path):
         self.progress_dialog.close()
-        QMessageBox.information(None, "Setup Complete", "tdl has been downloaded successfully.")
+        QMessageBox.information(
+            None, "Setup Complete", "tdl has been downloaded successfully."
+        )
         self.launch_main_window(tdl_path)
 
     def on_setup_failure(self, error_message):
         self.progress_dialog.close()
-        QMessageBox.critical(None, "Setup Error", f"Failed to set up tdl:\n\n{error_message}")
+        QMessageBox.critical(
+            None, "Setup Error", f"Failed to set up tdl:\n\n{error_message}"
+        )
         sys.exit(1)
 
     def launch_main_window(self, tdl_path):
         # Dynamically import MainWindow to avoid circular dependencies if it ever needs the app controller
-        from main_window import MainWindow
+        from src.main_window import MainWindow
+
         self.main_window = MainWindow(
             app=self.app,
             tdl_path=tdl_path,
             settings_manager=self.settings_manager,
             logger=self.logger,
-            theme=self.theme_name
+            theme=self.theme_name,
         )
         self.main_window.show()
 
@@ -90,12 +96,11 @@ def main():
     settings_manager = SettingsManager()
     theme_manager = ThemeManager()
 
-    theme_name = settings_manager.get('theme', 'light')
+    theme_name = settings_manager.get("theme", "light")
     stylesheet = theme_manager.get_stylesheet(theme_name)
     app.setStyleSheet(stylesheet)
 
-    controller = AppController(app)
-    controller.theme_name = theme_name
+    controller = AppController(app, settings_manager, theme_name)
 
     # Use a QTimer to start the controller after the event loop has started.
     # This ensures that the initial QMessageBox and QProgressDialog are properly displayed.
@@ -103,5 +108,6 @@ def main():
 
     sys.exit(app.exec())
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

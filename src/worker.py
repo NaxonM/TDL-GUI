@@ -21,9 +21,11 @@ TDL_DONE_RE = re.compile(
 # Regex for the overall progress bar.
 # Example: '[####################################.............................] [1m26s; 1.17 MB/s]'
 TDL_OVERALL_RE = re.compile(
-    r"^\[(?P<bar>#+\.*)\]\s+"
-    r"\[(?P<time>.+?);\s*(?P<speed>.+?)\]"
+    r"^\[(?P<bar>#+\.*)\]\s+" r"\[(?P<time>.+?);\s*(?P<speed>.+?)\]"
 )
+
+# Regex to strip ANSI escape codes
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # Regex for CPU/Memory stats
 # Example: 'CPU: 3.13% Memory: 31.26 MB Goroutines: 54'
@@ -46,7 +48,6 @@ class Worker(QThread):
     overallProgress = pyqtSignal(dict)
     statsUpdated = pyqtSignal(dict)
 
-
     def __init__(self, commands, logger, timeout=300, parent=None):
         super().__init__(parent)
         if not isinstance(commands[0], list):
@@ -68,7 +69,9 @@ class Worker(QThread):
             full_log = []
             raw_output = []
 
-            task_intro = f"--- Running task {i+1}/{len(self.commands)}: {' '.join(command)} ---"
+            task_intro = (
+                f"--- Running task {i+1}/{len(self.commands)}: {' '.join(command)} ---"
+            )
             self.logger.info(task_intro)
             full_log.append(task_intro)
 
@@ -80,11 +83,11 @@ class Worker(QThread):
                     text=True,
                     bufsize=1,
                     universal_newlines=True,
-                    encoding='utf-8',
-                    errors='replace'
+                    encoding="utf-8",
+                    errors="replace",
                 )
 
-                for line in iter(self.process.stdout.readline, ''):
+                for line in iter(self.process.stdout.readline, ""):
                     if self._is_stopped:
                         break
 
@@ -93,71 +96,73 @@ class Worker(QThread):
                     if not raw_line:
                         continue
 
+                    clean_line = ANSI_ESCAPE_RE.sub('', raw_line)
+
                     raw_output.append(raw_line)
                     full_log.append(raw_line)
 
                     # Check for a completed file first
-                    done_match = TDL_DONE_RE.search(raw_line)
+                    done_match = TDL_DONE_RE.search(clean_line)
                     if done_match:
                         data = done_match.groupdict()
-                        file_id = data['file_id'].strip()
+                        file_id = data["file_id"].strip()
 
                         if file_id not in self.seen_files:
                             self.seen_files.add(file_id)
                             self.downloadStarted.emit(file_id)
 
                         progress_data = {
-                            'id': file_id,
-                            'percent': 100,
-                            'size_info': data['size_info'],
-                            'eta': 'Done',
-                            'speed': data['speed'],
+                            "id": file_id,
+                            "percent": 100,
+                            "size_info": data["size_info"],
+                            "eta": "Done",
+                            "speed": data["speed"],
                         }
                         self.downloadProgress.emit(progress_data)
                         self.downloadFinished.emit(file_id)
-                        self.logger.info(raw_line) # Also log the raw message
+                        self.logger.info(raw_line)  # Also log the raw message
                         continue
 
                     # Check for in-progress file
-                    progress_match = TDL_IN_PROGRESS_RE.search(raw_line)
+                    progress_match = TDL_IN_PROGRESS_RE.search(clean_line)
                     if progress_match:
                         data = progress_match.groupdict()
-                        file_id = data['file_id'].strip()
+                        file_id = data["file_id"].strip()
 
                         if file_id not in self.seen_files:
                             self.seen_files.add(file_id)
                             self.downloadStarted.emit(file_id)
 
                         progress_data = {
-                            'id': file_id,
-                            'percent': float(data['percent'].replace('%', '')),
-                            'size_info': data['size_info'],
-                            'eta': data.get('eta', 'N/A'),
-                            'speed': data['speed'],
+                            "id": file_id,
+                            "percent": float(data["percent"].replace("%", "")),
+                            "size_info": data["size_info"],
+                            "eta": data.get("eta", "N/A"),
+                            "speed": data["speed"],
                         }
                         self.downloadProgress.emit(progress_data)
                         continue
 
                     # Check for overall progress
-                    overall_match = TDL_OVERALL_RE.search(raw_line)
+                    overall_match = TDL_OVERALL_RE.search(clean_line)
                     if overall_match:
                         data = overall_match.groupdict()
-                        bar = data['bar']
-                        hashes = bar.count('#')
-                        dots = bar.count('.')
+                        bar = data["bar"]
+                        hashes = bar.count("#")
+                        dots = bar.count(".")
                         total = hashes + dots
                         percentage = int((hashes / total) * 100) if total > 0 else 0
 
                         overall_data = {
-                            'percent': percentage,
-                            'time': data['time'],
-                            'speed': data['speed'],
+                            "percent": percentage,
+                            "time": data["time"],
+                            "speed": data["speed"],
                         }
                         self.overallProgress.emit(overall_data)
                         continue
 
                     # Check for stats
-                    stats_match = TDL_STATS_RE.search(raw_line)
+                    stats_match = TDL_STATS_RE.search(clean_line)
                     if stats_match:
                         self.statsUpdated.emit(stats_match.groupdict())
                         continue
@@ -178,7 +183,9 @@ class Worker(QThread):
                     overall_return_code = return_code
                     log_output = "\n".join(full_log)
                     self.taskFailedWithLog.emit(return_code, log_output)
-                    self.logger.error(f"Task failed with exit code {return_code}. Halting execution.")
+                    self.logger.error(
+                        f"Task failed with exit code {return_code}. Halting execution."
+                    )
                     break
 
             except subprocess.TimeoutExpired:
@@ -218,6 +225,7 @@ class Worker(QThread):
 
 class InitialSetupWorker(QThread):
     """A dedicated worker for the initial download of the tdl executable."""
+
     progress = pyqtSignal(int, int)
     success = pyqtSignal(str)
     failure = pyqtSignal(str)
