@@ -1066,7 +1066,8 @@ class MainWindow(QMainWindow):
 
     def _task_failed(self, log_output):
         self.logger.error("A task failed. See full log in the Log tab or app.log file.")
-        if "not authorized" in log_output:
+        # Check if log_output is a string before performing string operations
+        if isinstance(log_output, str) and "not authorized" in log_output:
             QMessageBox.warning(
                 self,
                 "Authentication Required",
