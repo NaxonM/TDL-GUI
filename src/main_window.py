@@ -4,6 +4,8 @@ import json
 import urllib.request
 import subprocess
 import re
+import os
+import sys
 from PyQt6.QtCore import (
     QUrl,
 )
@@ -31,6 +33,7 @@ from PyQt6.QtGui import (
 from functools import partial
 from src.settings_dialog import SettingsDialog
 from src.utility_dialog import UtilityDialog
+from src.update_manager import UpdateDialog, UpdateManager
 from src.config import UTILITY_CONFIGS
 from src.tdl_runner import TdlRunner
 from src.download_tab import DownloadTab
@@ -49,6 +52,7 @@ class MainWindow(QMainWindow):
         self.tdl_runner = TdlRunner(tdl_path, settings_manager, logger)
         self.worker = None
         self.tdl_version = self._get_tdl_version()
+        self.update_manager = None
         self.global_controls = []
         self.has_started_download = False
         self.active_task_tab_index = -1
@@ -332,7 +336,6 @@ class MainWindow(QMainWindow):
     def check_for_updates(self):
         self.logger.info("Checking for tdl updates...")
         try:
-            # Get local version
             local_version_str = self.tdl_version
             match = re.search(r"(\d+\.\d+\.\d+)", local_version_str)
             if not match:
@@ -344,15 +347,19 @@ class MainWindow(QMainWindow):
                 return
             local_version = match.group(1)
 
-            # Get latest version from GitHub
             url = "https://api.github.com/repos/iyear/tdl/releases/latest"
             with urllib.request.urlopen(url) as response:
                 data = json.loads(response.read().decode())
                 latest_version = data["tag_name"].lstrip("v")
                 release_notes = data["body"]
+                download_url = None
                 for asset in data["assets"]:
-                    if "linux" in asset["name"] and "amd64" in asset["name"]:
-                        # download_url = asset["browser_download_url"]
+                    if (
+                        "Windows" in asset["name"]
+                        and "64bit" in asset["name"]
+                        and asset["name"].endswith(".zip")
+                    ):
+                        download_url = asset["browser_download_url"]
                         break
 
             self.logger.info(
@@ -360,6 +367,14 @@ class MainWindow(QMainWindow):
             )
 
             if local_version < latest_version:
+                if not download_url:
+                    QMessageBox.warning(
+                        self,
+                        "Update Check Failed",
+                        "Could not find a compatible update file for Windows 64-bit.",
+                    )
+                    return
+
                 reply = QMessageBox.information(
                     self,
                     "Update Available",
@@ -369,16 +384,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 )
                 if reply == QMessageBox.StandardButton.Yes:
-                    self.logger.info(
-                        f"User agreed to update to version {latest_version}"
-                    )
-                    # I will implement the download and update logic later
-                    QMessageBox.information(
-                        self,
-                        "Not Implemented",
-                        "The automatic update functionality is not yet implemented.",
-                    )
-
+                    self.start_update_process(download_url, latest_version)
             else:
                 QMessageBox.information(
                     self, "No Updates", "You are using the latest version of tdl."
@@ -391,6 +397,35 @@ class MainWindow(QMainWindow):
                 "Update Check Failed",
                 "Could not check for updates. See logs for details.",
             )
+
+    def start_update_process(self, url, version):
+        self.logger.info(f"Starting update to version {version} from {url}")
+        update_dialog = UpdateDialog(version, self)
+
+        self.update_manager = UpdateManager(url, version, self.tdl_path)
+        self.update_manager.progress.connect(update_dialog.update_progress)
+        self.update_manager.error.connect(self.on_update_error)
+        self.update_manager.finished.connect(self.on_update_finished)
+
+        self.update_manager.start_download()
+        update_dialog.exec()
+
+    def on_update_error(self, error_message):
+        self.logger.error(f"Update failed: {error_message}")
+        QMessageBox.critical(self, "Update Failed", error_message)
+
+    def on_update_finished(self, updater_script_path, version):
+        self.logger.info(f"Update to {version} downloaded. Restarting...")
+        QMessageBox.information(
+            self,
+            "Update Ready",
+            "The update is ready. The application will now restart to complete the installation.",
+        )
+        # Use DETACHED_PROCESS to run the updater independently
+        subprocess.Popen(
+            [updater_script_path], creationflags=subprocess.DETACHED_PROCESS
+        )
+        self.app.quit()
 
     def handle_desktop_login(self, path, passcode):
         self.logger.info("Desktop login requested. See log for details.")
