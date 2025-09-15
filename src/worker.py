@@ -24,6 +24,9 @@ TDL_OVERALL_RE = re.compile(
     r"^\[(?P<bar>#+\.*)\]\s+" r"\[(?P<time>.+?);\s*(?P<speed>.+?)\]"
 )
 
+# Regex to strip ANSI escape codes
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
 # Regex for CPU/Memory stats
 # Example: 'CPU: 3.13% Memory: 31.26 MB Goroutines: 54'
 TDL_STATS_RE = re.compile(
@@ -93,11 +96,13 @@ class Worker(QThread):
                     if not raw_line:
                         continue
 
+                    clean_line = ANSI_ESCAPE_RE.sub('', raw_line)
+
                     raw_output.append(raw_line)
                     full_log.append(raw_line)
 
                     # Check for a completed file first
-                    done_match = TDL_DONE_RE.search(raw_line)
+                    done_match = TDL_DONE_RE.search(clean_line)
                     if done_match:
                         data = done_match.groupdict()
                         file_id = data["file_id"].strip()
@@ -119,7 +124,7 @@ class Worker(QThread):
                         continue
 
                     # Check for in-progress file
-                    progress_match = TDL_IN_PROGRESS_RE.search(raw_line)
+                    progress_match = TDL_IN_PROGRESS_RE.search(clean_line)
                     if progress_match:
                         data = progress_match.groupdict()
                         file_id = data["file_id"].strip()
@@ -139,7 +144,7 @@ class Worker(QThread):
                         continue
 
                     # Check for overall progress
-                    overall_match = TDL_OVERALL_RE.search(raw_line)
+                    overall_match = TDL_OVERALL_RE.search(clean_line)
                     if overall_match:
                         data = overall_match.groupdict()
                         bar = data["bar"]
@@ -157,7 +162,7 @@ class Worker(QThread):
                         continue
 
                     # Check for stats
-                    stats_match = TDL_STATS_RE.search(raw_line)
+                    stats_match = TDL_STATS_RE.search(clean_line)
                     if stats_match:
                         self.statsUpdated.emit(stats_match.groupdict())
                         continue
