@@ -217,7 +217,13 @@ class AdvancedSettingsDialog(QDialog):
         return widget
 
     def get_settings(self):
-        # This method will be used to retrieve the settings from the dialog
+        """Retrieves all settings from the dialog's UI controls."""
+        template_text = self.template_combo.currentText()
+        if template_text == "Custom...":
+            final_template = self.template_input.text()
+        else:
+            final_template = template_text.removeprefix("Default: ")
+
         return {
             "concurrent_tasks": self.concurrent_tasks_spinbox.value(),
             "threads_per_task": self.threads_per_task_spinbox.value(),
@@ -231,11 +237,7 @@ class AdvancedSettingsDialog(QDialog):
             "use_takeout": self.takeout_checkbox.isChecked(),
             "include_exts": self.include_ext_input.text(),
             "exclude_exts": self.exclude_ext_input.text(),
-            "template": (
-                self.template_input.text()
-                if self.template_combo.currentText() == "Custom..."
-                else self.template_combo.currentText()
-            ),
+            "template": final_template,
         }
 
     def _create_spinbox_with_arrows(self, min_val, max_val, default_val):
