@@ -48,7 +48,7 @@ ECHO.
 REM --- Step 3: Launch the application ---
 ECHO Launching application...
 ECHO.
-python src\main.py
+python -m src.main
 ECHO.
 ECHO Application closed.
 pause

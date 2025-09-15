@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
-from .config import CHAT_NAME_COLORS
+from src.config import CHAT_NAME_COLORS
 
 
 class ChatsTab(QWidget):

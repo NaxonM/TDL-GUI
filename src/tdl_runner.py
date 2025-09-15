@@ -1,5 +1,5 @@
 import urllib.request
-from .worker import Worker
+from src.worker import Worker
 
 
 class TdlRunner:

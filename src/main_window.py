@@ -29,13 +29,13 @@ from PyQt6.QtGui import (
 )
 
 from functools import partial
-from .settings_dialog import SettingsDialog
-from .utility_dialog import UtilityDialog
-from .config import UTILITY_CONFIGS
-from .tdl_runner import TdlRunner
-from .download_tab import DownloadTab
-from .export_tab import ExportTab
-from .chats_tab import ChatsTab
+from src.settings_dialog import SettingsDialog
+from src.utility_dialog import UtilityDialog
+from src.config import UTILITY_CONFIGS
+from src.tdl_runner import TdlRunner
+from src.download_tab import DownloadTab
+from src.export_tab import ExportTab
+from src.chats_tab import ChatsTab
 
 
 class MainWindow(QMainWindow):
