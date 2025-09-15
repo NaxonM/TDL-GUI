@@ -1,9 +1,15 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QLabel, QPlainTextEdit, QDialogButtonBox, QMessageBox
+    QDialog,
+    QVBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QDialogButtonBox,
+    QMessageBox,
 )
 from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtCore import Qt
 from login_worker import LoginWorker
+
 
 class QRCodeDialog(QDialog):
     def __init__(self, tdl_path, namespace, settings_manager, logger, parent=None):
@@ -25,7 +31,7 @@ class QRCodeDialog(QDialog):
         self.qr_code_display.setReadOnly(True)
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         self.qr_code_display.setFont(font)
-        self.qr_code_display.hide() # Hide until QR is ready
+        self.qr_code_display.hide()  # Hide until QR is ready
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.button_box.rejected.connect(self.reject)
@@ -34,7 +40,9 @@ class QRCodeDialog(QDialog):
         layout.addWidget(self.qr_code_display)
         layout.addWidget(self.button_box)
 
-        self.worker = LoginWorker(self.tdl_path, self.namespace, self.settings_manager, self.logger, mode='qr')
+        self.worker = LoginWorker(
+            self.tdl_path, self.namespace, self.settings_manager, self.logger, mode="qr"
+        )
         self.worker.qr_code_ready.connect(self._on_qr_code_ready)
         self.worker.login_success.connect(self._on_login_success)
         self.worker.login_failed.connect(self._on_login_failed)
@@ -46,9 +54,13 @@ class QRCodeDialog(QDialog):
         self.info_label.setText("Scan the QR code below using your Telegram app.")
         self.qr_code_display.show()
         # Clean up the text a bit, remove the cursor-up ANSI codes and other noise
-        lines = qr_text.split('\n')
-        cleaned_lines = [line for line in lines if '?' not in line and 'Scan' not in line and 'WARN' not in line]
-        cleaned_text = "\n".join(cleaned_lines).replace('\x1b[A', '')
+        lines = qr_text.split("\n")
+        cleaned_lines = [
+            line
+            for line in lines
+            if "?" not in line and "Scan" not in line and "WARN" not in line
+        ]
+        cleaned_text = "\n".join(cleaned_lines).replace("\x1b[A", "")
         self.qr_code_display.setPlainText(cleaned_text)
 
     def _on_login_success(self):
@@ -56,8 +68,13 @@ class QRCodeDialog(QDialog):
         self.accept()
 
     def _on_login_failed(self, error_message):
-        if not self.isVisible(): return # Don't show error if dialog is already closed
-        QMessageBox.critical(self, "Login Failed", f"The QR code login process failed:\n\n{error_message}")
+        if not self.isVisible():
+            return  # Don't show error if dialog is already closed
+        QMessageBox.critical(
+            self,
+            "Login Failed",
+            f"The QR code login process failed:\n\n{error_message}",
+        )
         self.reject()
 
     def _on_worker_finished(self):

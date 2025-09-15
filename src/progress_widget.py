@@ -1,10 +1,12 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 from PyQt6.QtCore import Qt
 
+
 class DownloadProgressWidget(QWidget):
     """
     A custom widget to display detailed progress of a single file download.
     """
+
     def __init__(self, file_id, parent=None):
         super().__init__(parent)
         self.file_id = file_id
@@ -18,7 +20,7 @@ class DownloadProgressWidget(QWidget):
         self.filename_label.setStyleSheet("font-weight: bold;")
 
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFormat('%p%')
+        self.progress_bar.setFormat("%p%")
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -46,19 +48,20 @@ class DownloadProgressWidget(QWidget):
         main_layout.addLayout(stats_layout)
 
         # Add a frame for better visual separation
-        self.setContentsMargins(0,0,0,0)
-        self.setStyleSheet("""
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setStyleSheet(
+            """
             DownloadProgressWidget {
                 border: 1px solid #D5DBDB;
                 border-radius: 4px;
                 margin-bottom: 3px;
             }
-        """)
-
+        """
+        )
 
     def update_progress(self, data):
         """Updates the progress bar and labels with new data."""
-        self.progress_bar.setValue(int(data['percent']))
+        self.progress_bar.setValue(int(data["percent"]))
         self.size_label.setText(f"Size: {data['size_info']}")
         self.eta_label.setText(f"ETA: {data['eta']}")
         self.speed_label.setText(f"Speed: {data['speed']}")

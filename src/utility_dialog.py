@@ -1,8 +1,16 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QDialogButtonBox, QFileDialog, QWidget, QHBoxLayout
+    QDialog,
+    QVBoxLayout,
+    QFormLayout,
+    QLineEdit,
+    QPushButton,
+    QDialogButtonBox,
+    QFileDialog,
+    QWidget,
+    QHBoxLayout,
 )
 from PyQt6.QtCore import QDir
+
 
 class UtilityDialog(QDialog):
     def __init__(self, title, fields, parent=None):
@@ -15,13 +23,13 @@ class UtilityDialog(QDialog):
         form_layout = QFormLayout()
 
         for field_config in fields:
-            name = field_config['name']
-            label = field_config['label']
-            field_type = field_config.get('type', 'text')
+            name = field_config["name"]
+            label = field_config["label"]
+            field_type = field_config.get("type", "text")
 
-            if field_type == 'open_file':
+            if field_type == "open_file":
                 widget = self._create_file_input(True)
-            elif field_type == 'save_file':
+            elif field_type == "save_file":
                 widget = self._create_file_input(False)
             else:
                 widget = QLineEdit()
@@ -31,7 +39,9 @@ class UtilityDialog(QDialog):
 
         main_layout.addLayout(form_layout)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         main_layout.addWidget(button_box)
@@ -39,7 +49,7 @@ class UtilityDialog(QDialog):
     def _create_file_input(self, open_file=True):
         container = QWidget()
         layout = QHBoxLayout(container)
-        layout.setContentsMargins(0,0,0,0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         line_edit = QLineEdit()
         button = QPushButton("...")
@@ -51,7 +61,7 @@ class UtilityDialog(QDialog):
 
         layout.addWidget(line_edit)
         layout.addWidget(button)
-        container.line_edit = line_edit # Store reference
+        container.line_edit = line_edit  # Store reference
         return container
 
     def _get_file_path(self, line_edit):
@@ -68,7 +78,7 @@ class UtilityDialog(QDialog):
         values = {}
         for name, widget in self.fields.items():
             if isinstance(widget, QLineEdit):
-                 values[name] = widget.text()
-            elif hasattr(widget, 'line_edit'): # For file input containers
-                 values[name] = widget.line_edit.text()
+                values[name] = widget.text()
+            elif hasattr(widget, "line_edit"):  # For file input containers
+                values[name] = widget.line_edit.text()
         return values
