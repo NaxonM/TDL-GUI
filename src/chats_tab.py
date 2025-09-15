@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
 )
-from PyQt6.QtGui import QAction, QColor
 
 from .config import CHAT_NAME_COLORS
 

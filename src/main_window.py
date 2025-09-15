@@ -1,52 +1,23 @@
 # main_window.py
 
-import sys
-import os
-import glob
 import json
-import tempfile
 import urllib.request
 import subprocess
 import re
 from PyQt6.QtCore import (
-    pyqtSignal,
-    QDir,
     QUrl,
-    QDate,
-    QDateTime,
-    Qt,
-    QSize,
-    QStandardPaths,
 )
 from PyQt6.QtWidgets import (
-    QApplication,
     QMainWindow,
     QTabWidget,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QFormLayout,
-    QMenu,
     QPlainTextEdit,
-    QGroupBox,
     QPushButton,
-    QLineEdit,
-    QToolButton,
-    QSpinBox,
-    QCheckBox,
     QProgressBar,
-    QFileDialog,
     QMessageBox,
-    QDateEdit,
     QLabel,
-    QComboBox,
-    QScrollArea,
-    QStackedWidget,
-    QAbstractSpinBox,
-    QStyle,
-    QTableWidget,
-    QHeaderView,
-    QTableWidgetItem,
 )
 from PyQt6.QtGui import (
     QAction,
@@ -58,15 +29,9 @@ from PyQt6.QtGui import (
 )
 
 from functools import partial
-from .worker import Worker
 from .settings_dialog import SettingsDialog
 from .utility_dialog import UtilityDialog
-from .progress_widget import DownloadProgressWidget
-from .settings_manager import SettingsManager
-from .logger import Logger
-from .advanced_settings_dialog import AdvancedSettingsDialog
-from .advanced_export_dialog import AdvancedExportDialog
-from .config import UTILITY_CONFIGS, CHAT_NAME_COLORS
+from .config import UTILITY_CONFIGS
 from .tdl_runner import TdlRunner
 from .download_tab import DownloadTab
 from .export_tab import ExportTab
@@ -385,10 +350,9 @@ class MainWindow(QMainWindow):
                 data = json.loads(response.read().decode())
                 latest_version = data["tag_name"].lstrip("v")
                 release_notes = data["body"]
-                download_url = ""
                 for asset in data["assets"]:
                     if "linux" in asset["name"] and "amd64" in asset["name"]:
-                        download_url = asset["browser_download_url"]
+                        # download_url = asset["browser_download_url"]
                         break
 
             self.logger.info(
@@ -425,7 +389,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Update Check Failed",
-                f"Could not check for updates. See logs for details.",
+                "Could not check for updates. See logs for details.",
             )
 
     def handle_desktop_login(self, path, passcode):

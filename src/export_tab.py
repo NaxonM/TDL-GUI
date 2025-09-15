@@ -1,4 +1,4 @@
-from PyQt6.QtCore import pyqtSignal, QDate, QDateTime, Qt
+from PyQt6.QtCore import pyqtSignal, QDate, QDateTime
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,

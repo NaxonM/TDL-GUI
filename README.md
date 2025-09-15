@@ -51,6 +51,16 @@ You can run the full test suite using `pytest`:
 pytest
 ```
 
+This project uses `ruff` for linting and formatting. You can check the code for issues with:
+```bash
+ruff check .
+```
+
+To automatically fix issues, run:
+```bash
+ruff check . --fix
+```
+
 ## Screenshots
 
 *(Placeholder for screenshots of the application)*

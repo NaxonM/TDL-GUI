@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 
 from src.worker import Worker, ANSI_ESCAPE_RE
 

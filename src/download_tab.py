@@ -1,5 +1,5 @@
 import os
-from PyQt6.QtCore import QDir, QUrl, Qt, pyqtSignal
+from PyQt6.QtCore import QDir, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,

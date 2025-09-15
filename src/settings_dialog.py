@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDir, pyqtSignal
 from .login_dialog import LoginDialog
 from .qr_code_dialog import QRCodeDialog
-from .settings_manager import SettingsManager
 from .theme_manager import ThemeManager
 
 

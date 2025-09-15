@@ -1,4 +1,3 @@
-import sys
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -8,7 +7,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QMessageBox,
 )
-from PyQt6.QtCore import pyqtSignal, QRegularExpression
+from PyQt6.QtCore import QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 from .login_worker import LoginWorker
 

@@ -1,5 +1,4 @@
 import sys
-import os
 from .tdl_manager import TdlManager
 from .worker import InitialSetupWorker
 from .settings_manager import SettingsManager
@@ -8,7 +7,6 @@ from .theme_manager import ThemeManager
 
 # --- UI Imports ---
 from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
-from PyQt6.QtGui import QPalette
 from PyQt6.QtCore import Qt, QTimer
 
 
