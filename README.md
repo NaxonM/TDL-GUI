@@ -39,6 +39,18 @@ The script is intelligent and will handle the setup for you:
 - If you already have the required `PyQt6` library installed on your system, the application will start immediately.
 - If `PyQt6` is missing, the script will prompt you to automatically create a local, sandboxed environment and install it. Just follow the on-screen instructions.
 
+## Development & Testing
+
+To contribute to development, you'll need to install the testing dependencies:
+```bash
+pip install -r requirements-dev.txt
+```
+
+You can run the full test suite using `pytest`:
+```bash
+pytest
+```
+
 ## Screenshots
 
 *(Placeholder for screenshots of the application)*

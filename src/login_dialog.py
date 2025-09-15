@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
-from login_worker import LoginWorker
+from src.login_worker import LoginWorker
 
 
 class LoginDialog(QDialog):

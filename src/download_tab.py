@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import (
     QStyle,
 )
 
-from advanced_settings_dialog import AdvancedSettingsDialog
-from progress_widget import DownloadProgressWidget
+from src.advanced_settings_dialog import AdvancedSettingsDialog
+from src.progress_widget import DownloadProgressWidget
 
 
 class DownloadTab(QWidget):

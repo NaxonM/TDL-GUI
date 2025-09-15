@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtCore import Qt
-from login_worker import LoginWorker
+from src.login_worker import LoginWorker
 
 
 class QRCodeDialog(QDialog):

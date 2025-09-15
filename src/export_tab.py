@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QMessageBox,
 )
-from advanced_export_dialog import AdvancedExportDialog
+from src.advanced_export_dialog import AdvancedExportDialog
 
 
 class ExportTab(QWidget):
