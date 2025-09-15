@@ -186,12 +186,22 @@ class AdvancedSettingsDialog(QDialog):
         template_v_layout.addLayout(template_h_layout)
 
         self.placeholder_widget = self._create_template_placeholders()
-        self.placeholder_widget.setVisible(False)
         template_v_layout.addWidget(self.placeholder_widget)
+
+        # Connect signals
+        self.template_combo.currentTextChanged.connect(self._on_template_changed)
+        # Set initial state
+        self._on_template_changed(self.template_combo.currentText())
 
         layout.addWidget(template_group)
         layout.addStretch()
         return widget
+
+    def _on_template_changed(self, text):
+        """Shows or hides the custom template input field based on the combo box selection."""
+        is_custom = text == "Custom..."
+        self.template_input.setVisible(is_custom)
+        self.placeholder_widget.setVisible(is_custom)
 
     def _create_template_placeholders(self):
         widget = QWidget()
