@@ -78,7 +78,7 @@ class AppController:
 
     def launch_main_window(self, tdl_path):
         # Dynamically import MainWindow to avoid circular dependencies if it ever needs the app controller
-        from main_window import MainWindow
+        from src.main_window import MainWindow
 
         self.main_window = MainWindow(
             app=self.app,
