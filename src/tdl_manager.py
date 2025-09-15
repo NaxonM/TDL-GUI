@@ -3,7 +3,9 @@ import platform
 import urllib.request
 import urllib.error
 import shutil
-import subprocess
+import json
+import zipfile
+import tempfile
 
 
 class TdlManager:
@@ -30,85 +32,69 @@ class TdlManager:
 
     def download_and_install_tdl(self, progress_callback=None):
         """
-        Main orchestration method to download and install tdl.
-        On Windows, it uses a modified PowerShell script.
-        On other platforms, it returns an error as this is not supported.
+        Downloads and installs the latest version of tdl for Windows.
+        This method is now self-contained and does not rely on external scripts.
         Returns (path, None) on success, (None, error_message) on failure.
         """
-        # The primary supported method is the Windows PowerShell installer.
         if platform.system() != "Windows":
             return None, "Automatic installation is only supported on Windows."
 
         try:
-            # 1. Download the installer script
-            # The progress_callback is not used here as the script provides its own progress.
+            # 1. Get latest version from GitHub API
             if progress_callback:
-                progress_callback(0, 0)  # Indicate busy state
+                progress_callback(0, 100)
 
-            script_url = "https://docs.iyear.me/tdl/install.ps1"
-            with urllib.request.urlopen(script_url) as response:
+            api_url = "https://api.github.com/repos/iyear/tdl/releases/latest"
+            with urllib.request.urlopen(api_url) as response:
                 if response.status != 200:
-                    return (
-                        None,
-                        f"Failed to download installer script (status: {response.status})",
-                    )
-                original_script = response.read().decode("utf-8")
+                    return None, f"Failed to get release info (status: {response.status})"
+                release_data = json.loads(response.read().decode("utf-8"))
+                latest_version = release_data["tag_name"]
 
-            # 2. Modify the script for portable use
-            portable_path = self.bin_dir.replace("\\", "\\\\")
-            modified_script = original_script.replace(
-                '$Location = "$Env:SystemDrive\\tdl"', f'$Location = "{portable_path}"'
-            )
+            # 2. Determine architecture and construct URL
+            arch = "64bit" if platform.architecture()[0] == "64bit" else "32bit"
+            file_name = f"tdl_Windows_{arch}.zip"
+            download_url = f"https://github.com/iyear/tdl/releases/download/{latest_version}/{file_name}"
 
-            # Remove the admin check and PATH modification logic
-            modified_script = modified_script.replace(
-                'if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator"))',
-                "if ($false)",
-            )
-            modified_script = modified_script.replace(
-                '$PathEnv = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)',
-                "# PATH modification disabled for portable install",
-            )
-            modified_script = modified_script.replace(
-                'if (-not($PathEnv -like "*$Location*"))', "if ($false)"
-            )
+            # 3. Download the zip file
+            temp_zip_path = os.path.join(tempfile.gettempdir(), file_name)
 
-            # 3. Save the modified script to a temporary file
-            temp_script_path = os.path.join(self.bin_dir, "install_tdl.ps1")
-            with open(temp_script_path, "w", encoding="utf-8") as f:
-                f.write(modified_script)
+            def _reporthook(count, block_size, total_size):
+                if progress_callback and total_size > 0:
+                    percent = int(count * block_size * 100 / total_size)
+                    progress_callback(percent, 100)
 
-            # 4. Execute the script
-            command = [
-                "powershell",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                temp_script_path,
-            ]
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
-            stdout, stderr = process.communicate()
+            urllib.request.urlretrieve(download_url, temp_zip_path, _reporthook)
 
-            if process.returncode != 0:
-                return None, f"Installer script failed:\n{stdout}\n{stderr}"
+            # 4. Extract tdl.exe from the zip file
+            if progress_callback:
+                progress_callback(0, 100)
 
-            # 5. Clean up the temporary script
-            os.remove(temp_script_path)
+            with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
+                for member in zip_ref.infolist():
+                    if member.filename.endswith("tdl.exe"):
+                        # Extract to bin_dir, removing any parent folders from zip
+                        member.filename = os.path.basename(member.filename)
+                        zip_ref.extract(member, self.bin_dir)
+                        break
+                else:
+                    os.remove(temp_zip_path) # Clean up before returning
+                    return None, "Could not find tdl.exe in the downloaded archive."
+
+            # 5. Clean up
+            os.remove(temp_zip_path)
 
             # 6. Verify installation
             if os.path.exists(self.local_tdl_path):
                 if progress_callback:
-                    progress_callback(100, 100)  # Indicate completion
+                    progress_callback(100, 100)
                 return self.local_tdl_path, None
             else:
-                return (
-                    None,
-                    f"tdl.exe not found at the expected path after running installer.\n{stdout}\n{stderr}",
-                )
+                return None, "tdl.exe not found at the expected path after installation."
 
         except urllib.error.URLError as e:
             return None, f"A network error occurred: {e.reason}"
+        except (json.JSONDecodeError, KeyError) as e:
+            return None, f"Failed to parse GitHub API response: {e}"
         except Exception as e:
-            return None, f"An error occurred during the PowerShell install process: {e}"
+            return None, f"An unexpected error occurred: {e}"
