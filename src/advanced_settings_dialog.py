@@ -186,12 +186,22 @@ class AdvancedSettingsDialog(QDialog):
         template_v_layout.addLayout(template_h_layout)
 
         self.placeholder_widget = self._create_template_placeholders()
-        self.placeholder_widget.setVisible(False)
         template_v_layout.addWidget(self.placeholder_widget)
+
+        # Connect signals
+        self.template_combo.currentTextChanged.connect(self._on_template_changed)
+        # Set initial state
+        self._on_template_changed(self.template_combo.currentText())
 
         layout.addWidget(template_group)
         layout.addStretch()
         return widget
+
+    def _on_template_changed(self, text):
+        """Shows or hides the custom template input field based on the combo box selection."""
+        is_custom = text == "Custom..."
+        self.template_input.setVisible(is_custom)
+        self.placeholder_widget.setVisible(is_custom)
 
     def _create_template_placeholders(self):
         widget = QWidget()
@@ -217,7 +227,13 @@ class AdvancedSettingsDialog(QDialog):
         return widget
 
     def get_settings(self):
-        # This method will be used to retrieve the settings from the dialog
+        """Retrieves all settings from the dialog's UI controls."""
+        template_text = self.template_combo.currentText()
+        if template_text == "Custom...":
+            final_template = self.template_input.text()
+        else:
+            final_template = template_text.removeprefix("Default: ")
+
         return {
             "concurrent_tasks": self.concurrent_tasks_spinbox.value(),
             "threads_per_task": self.threads_per_task_spinbox.value(),
@@ -231,11 +247,7 @@ class AdvancedSettingsDialog(QDialog):
             "use_takeout": self.takeout_checkbox.isChecked(),
             "include_exts": self.include_ext_input.text(),
             "exclude_exts": self.exclude_ext_input.text(),
-            "template": (
-                self.template_input.text()
-                if self.template_combo.currentText() == "Custom..."
-                else self.template_combo.currentText()
-            ),
+            "template": final_template,
         }
 
     def _create_spinbox_with_arrows(self, min_val, max_val, default_val):

@@ -6,7 +6,7 @@ This application provides an intuitive way to access the powerful features of `t
 
 ## Features
 
-- **Automatic `tdl` Installation**: The GUI automatically detects if `tdl` is missing and downloads the correct version for your system.
+- **Reliable `tdl` Installation**: The GUI automatically detects if `tdl` is missing and downloads the correct version for your system using a robust, native Python downloader.
 - **Light & Dark Themes**: Automatically detects your system's theme and applies a modern, harmonious color scheme for excellent readability.
 - **Comprehensive Download Tab**:
     - Download from multiple message links or JSON files.

@@ -78,7 +78,6 @@ class DownloadTab(QWidget):
                 self.dest_path_input,
                 self.browse_dest_button,
                 self.advanced_settings_button,
-                self.start_download_button,
                 self.resume_download_button,
             ]
         )
@@ -278,6 +277,8 @@ class DownloadTab(QWidget):
         for control in self.controls:
             control.setEnabled(not is_running)
 
+        # The start/stop button should always be enabled.
+        self.start_download_button.setEnabled(True)
         self.start_download_button.setText(
             "Stop Download" if is_running else "Start Download"
         )
