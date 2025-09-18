@@ -35,14 +35,6 @@ class ChatsTab(QWidget):
     def _init_ui(self):
         layout = QVBoxLayout(self)
 
-        button_layout = QHBoxLayout()
-        self.refresh_chats_button = QPushButton("Refresh Chat List")
-        self.refresh_chats_button.setToolTip(
-            "Fetch the latest list of your chats from Telegram."
-        )
-        button_layout.addWidget(self.refresh_chats_button)
-        button_layout.addStretch()
-
         self.chats_table = QTableWidget()
         self.chats_table.setColumnCount(4)
         self.chats_table.setHorizontalHeaderLabels(["Name", "Type", "ID", "Username"])
@@ -55,8 +47,16 @@ class ChatsTab(QWidget):
         self.chats_table.setSortingEnabled(True)
         self.chats_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
-        layout.addLayout(button_layout)
+        button_layout = QHBoxLayout()
+        self.refresh_chats_button = QPushButton("Refresh Chat List")
+        self.refresh_chats_button.setToolTip(
+            "Fetch the latest list of your chats from Telegram."
+        )
+        button_layout.addStretch()
+        button_layout.addWidget(self.refresh_chats_button)
+
         layout.addWidget(self.chats_table)
+        layout.addLayout(button_layout)
 
         self.controls.extend([self.refresh_chats_button, self.chats_table])
 

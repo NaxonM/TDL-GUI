@@ -39,6 +39,8 @@ from src.tdl_runner import TdlRunner
 from src.download_tab import DownloadTab
 from src.export_tab import ExportTab
 from src.chats_tab import ChatsTab
+from src.upload_tab import UploadTab
+from src.forward_tab import ForwardTab
 
 
 class MainWindow(QMainWindow):
@@ -103,11 +105,17 @@ class MainWindow(QMainWindow):
         self.download_tab = DownloadTab(
             self.tdl_runner, self.settings_manager, self.logger
         )
+        self.upload_tab = UploadTab(self.tdl_runner, self.settings_manager, self.logger)
+        self.forward_tab = ForwardTab(
+            self.tdl_runner, self.settings_manager, self.logger
+        )
         self.export_tab = ExportTab(self.tdl_runner, self.settings_manager, self.logger)
         self.chats_tab = ChatsTab(self.tdl_runner, self.settings_manager, self.logger)
         self.log_tab = self._create_log_tab()
 
         self.tabs.addTab(self.download_tab, "Download")
+        self.tabs.addTab(self.upload_tab, "Upload")
+        self.tabs.addTab(self.forward_tab, "Forward")
         self.tabs.addTab(self.export_tab, "Export")
         self.tabs.addTab(self.chats_tab, "Chats")
         self.tabs.addTab(self.log_tab, "Log")
@@ -129,6 +137,16 @@ class MainWindow(QMainWindow):
         self.download_tab.task_finished.connect(self._task_finished)
         self.download_tab.overall_progress_updated.connect(self.update_overall_progress)
         self.download_tab.system_stats_updated.connect(self.update_system_stats)
+
+        # Upload Tab Connections
+        self.upload_tab.task_started.connect(self.on_task_started)
+        self.upload_tab.task_finished.connect(self._task_finished)
+        self.upload_tab.system_stats_updated.connect(self.update_system_stats)
+
+        # Forward Tab Connections
+        self.forward_tab.task_started.connect(self.on_task_started)
+        self.forward_tab.task_finished.connect(self._task_finished)
+        self.forward_tab.task_failed.connect(self._on_forward_task_failed)
 
         # Export Tab Connections
         self.export_tab.task_started.connect(self.on_task_started)
@@ -204,6 +222,8 @@ class MainWindow(QMainWindow):
     def set_task_running_ui_state(self, is_running, tab_index=-1):
         """Enables or disables UI controls based on the state of a running task."""
         self.download_tab.set_running_state(is_running)
+        self.upload_tab.set_running_state(is_running)
+        self.forward_tab.set_running_state(is_running)
         self.export_tab.set_running_state(is_running)
         self.chats_tab.set_running_state(is_running)
         for widget in self.global_controls:
@@ -532,6 +552,42 @@ class MainWindow(QMainWindow):
             if self.worker:
                 self.worker.wait()
         event.accept()
+
+    def _on_forward_task_failed(self, log_output):
+        """Handles a failed task from the forward tab, showing a detailed dialog."""
+        self.logger.error("Forwarding task failed.")
+
+        error_title = "Forwarding Task Failed"
+        error_message = "An error occurred during the forwarding task."
+
+        # Try to parse a more specific error from the tdl output
+        # Go panics are a good indicator of a fatal, specific error.
+        panic_match = re.search(r"panic:\s*(.*)", log_output, re.IGNORECASE)
+        if panic_match:
+            error_details = panic_match.group(1).strip()
+            # Further clean up common Go error prefixes
+            if "invalid expression" in error_details:
+                error_title = "Invalid Expression"
+                error_message = "The expression you provided is invalid. Please correct it and try again."
+                # Extract just the core error message if possible
+                expr_err_match = re.search(r"invalid expression:\s*(.*)", error_details, re.IGNORECASE)
+                if expr_err_match:
+                    error_details = expr_err_match.group(1).strip()
+
+            else:
+                 error_message = "A critical error occurred in the `tdl` tool."
+        else:
+            # Fallback for non-panic errors
+            error_details = "See the full log below for details."
+
+
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Critical)
+        msg_box.setWindowTitle(error_title)
+        msg_box.setText(f"<b>{error_message}</b>")
+        msg_box.setInformativeText("Please check the details below and consult the logs if the issue persists.")
+        msg_box.setDetailedText(log_output)
+        msg_box.exec()
 
     def _task_failed(self, log_output):
         self.logger.error("A task failed. See full log in the Log tab or app.log file.")

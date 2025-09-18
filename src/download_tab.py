@@ -27,6 +27,7 @@ class DownloadTab(QWidget):
 
     def __init__(self, tdl_runner, settings_manager, logger, parent=None):
         super().__init__(parent)
+        self.setObjectName("DownloadTab")
         self.tdl_runner = tdl_runner
         self.settings_manager = settings_manager
         self.logger = logger
@@ -135,8 +136,10 @@ class DownloadTab(QWidget):
         self.dest_path_input.setPlaceholderText(f"Default: {default_dest}")
 
         self.browse_dest_button = QToolButton()
+        self.browse_dest_button.setObjectName("BrowseButton")
         icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
         self.browse_dest_button.setIcon(icon)
+        self.browse_dest_button.setToolTip("Browse for destination directory")
 
         layout.addWidget(self.dest_path_input)
         layout.addWidget(self.browse_dest_button)
@@ -201,7 +204,10 @@ class DownloadTab(QWidget):
             if not clean_line:
                 continue
             if clean_line.endswith(".json") and os.path.exists(clean_line):
-                command.extend(["-f", clean_line])
+                if " " in clean_line and os.name == "nt":
+                    command.extend(["-f", f'"{clean_line}"'])
+                else:
+                    command.extend(["-f", clean_line])
             else:
                 command.extend(["-u", clean_line])
 
@@ -209,7 +215,11 @@ class DownloadTab(QWidget):
             "Downloads"
         )
         os.makedirs(dest_path, exist_ok=True)
-        command.extend(["-d", dest_path])
+
+        if " " in dest_path and os.name == "nt":
+            command.extend(["-d", f'"{dest_path}"'])
+        else:
+            command.extend(["-d", dest_path])
 
         if self.advanced_settings:
             command.extend(["-l", str(self.advanced_settings["concurrent_tasks"])])

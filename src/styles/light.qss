@@ -57,9 +57,17 @@ QGroupBox::title {
 }
 
 /* === INPUT WIDGETS === */
-QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox, 
-QDateEdit, QTimeEdit, QDateTimeEdit {
+QLineEdit, QPlainTextEdit, QTextEdit, QDateEdit, QTimeEdit, QDateTimeEdit {
     padding: 6px 12px;
+    border: 2px solid #b2bec3; /* Use consistent border width */
+    border-radius: 5px;
+    background-color: #ffffff;
+    color: #2d3436;
+    font-size: 14px;
+}
+
+QSpinBox, QDoubleSpinBox {
+    padding: 6px 22px 6px 12px; /* Extra right padding for buttons */
     border: 2px solid #b2bec3;
     border-radius: 5px;
     background-color: #ffffff;
@@ -82,7 +90,7 @@ QSpinBox:disabled, QDoubleSpinBox:disabled {
 
 /* === COMBO BOX === */
 QComboBox {
-    padding: 6px 12px;
+    padding: 6px 25px 6px 12px; /* Extra right padding for dropdown arrow */
     border: 2px solid #b2bec3;
     border-radius: 5px;
     background-color: #ffffff;
@@ -95,15 +103,19 @@ QComboBox:focus {
 }
 
 QComboBox::drop-down {
-    border: none;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
     width: 20px;
+    border-left-width: 1px;
+    border-left-color: #b2bec3;
+    border-left-style: solid;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
 }
 
 QComboBox::down-arrow {
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 5px solid #2d3436;
+    border: 5px solid transparent;
+    border-top-color: #2d3436;
     width: 0;
     height: 0;
 }
@@ -499,48 +511,20 @@ QDockWidget::title {
 }
 
 /* === SPIN BOX ARROWS === */
-QSpinBox::up-button, QDoubleSpinBox::up-button {
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 16px;
-    border-left: 1px solid #b2bec3;
-    border-bottom: 1px solid #b2bec3;
-    background-color: #e4e9ed;
-}
-
-QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {
-    background-color: #0984e3;
-}
-
+QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 16px;
-    border-left: 1px solid #b2bec3;
-    border-top: 1px solid #b2bec3;
     background-color: #e4e9ed;
+    border: 1px solid #b2bec3;
 }
 
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
-    background-color: #0984e3;
+    background-color: #dfe6e9;
 }
 
-QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-bottom: 4px solid #2d3436;
-    width: 0;
-    height: 0;
-}
-
-QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 4px solid #2d3436;
-    width: 0;
-    height: 0;
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
+    background-color: #74b9ff;
 }
 
 /* === ERROR/SUCCESS STATES === */
@@ -557,4 +541,22 @@ QLineEdit[class="success"], QPlainTextEdit[class="success"], QTextEdit[class="su
 QLineEdit[class="warning"], QPlainTextEdit[class="warning"], QTextEdit[class="warning"] {
     border-color: #fdcb6e;
     background-color: #fff8e0;
+}
+
+/* Custom rule for the small delete button in preset menus */
+#AdvancedForwardDialog #PresetDeleteButton {
+    padding: 2px;
+    border: none;
+    min-width: 0px;
+    background-color: transparent;
+}
+
+#AdvancedForwardDialog #PresetDeleteButton:hover {
+    background-color: #e4e9ed;
+}
+
+/* Rule for compact, icon-only buttons next to input fields */
+#DownloadTab #BrowseButton {
+    padding: 4px;
+    min-width: 0px;
 }

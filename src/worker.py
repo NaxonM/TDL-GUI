@@ -45,6 +45,11 @@ class Worker(QThread):
     downloadStarted = pyqtSignal(str)
     downloadProgress = pyqtSignal(dict)
     downloadFinished = pyqtSignal(str)
+
+    uploadStarted = pyqtSignal(str)
+    uploadProgress = pyqtSignal(dict)
+    uploadFinished = pyqtSignal(str)
+
     overallProgress = pyqtSignal(dict)
     statsUpdated = pyqtSignal(dict)
 
@@ -101,6 +106,10 @@ class Worker(QThread):
                     raw_output.append(raw_line)
                     full_log.append(raw_line)
 
+                    # Determine if this is a download or upload task
+                    is_download_task = "download" in command
+                    is_upload_task = "up" in command
+
                     # Check for a completed file first
                     done_match = TDL_DONE_RE.search(clean_line)
                     if done_match:
@@ -109,7 +118,10 @@ class Worker(QThread):
 
                         if file_id not in self.seen_files:
                             self.seen_files.add(file_id)
-                            self.downloadStarted.emit(file_id)
+                            if is_download_task:
+                                self.downloadStarted.emit(file_id)
+                            elif is_upload_task:
+                                self.uploadStarted.emit(file_id)
 
                         progress_data = {
                             "id": file_id,
@@ -118,8 +130,14 @@ class Worker(QThread):
                             "eta": "Done",
                             "speed": data["speed"],
                         }
-                        self.downloadProgress.emit(progress_data)
-                        self.downloadFinished.emit(file_id)
+
+                        if is_download_task:
+                            self.downloadProgress.emit(progress_data)
+                            self.downloadFinished.emit(file_id)
+                        elif is_upload_task:
+                            self.uploadProgress.emit(progress_data)
+                            self.uploadFinished.emit(file_id)
+
                         self.logger.info(raw_line)  # Also log the raw message
                         continue
 
@@ -131,7 +149,10 @@ class Worker(QThread):
 
                         if file_id not in self.seen_files:
                             self.seen_files.add(file_id)
-                            self.downloadStarted.emit(file_id)
+                            if is_download_task:
+                                self.downloadStarted.emit(file_id)
+                            elif is_upload_task:
+                                self.uploadStarted.emit(file_id)
 
                         progress_data = {
                             "id": file_id,
@@ -140,7 +161,11 @@ class Worker(QThread):
                             "eta": data.get("eta", "N/A"),
                             "speed": data["speed"],
                         }
-                        self.downloadProgress.emit(progress_data)
+
+                        if is_download_task:
+                            self.downloadProgress.emit(progress_data)
+                        elif is_upload_task:
+                            self.uploadProgress.emit(progress_data)
                         continue
 
                     # Check for overall progress

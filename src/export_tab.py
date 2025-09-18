@@ -171,7 +171,11 @@ class ExportTab(QWidget):
             self.logger.info("Export cancelled by user.")
             return
 
-        command = ["chat", "export", "-c", source, "-o", output_path]
+        if " " in output_path and __import__("os").name == "nt":
+            command = ["chat", "export", "-c", source, "-o", f'"{output_path}"']
+        else:
+            command = ["chat", "export", "-c", source, "-o", output_path]
+
         export_type_index = self.export_type_combo.currentIndex()
         if export_type_index == 1:
             from_dt = QDateTime(self.from_date_edit.date())
