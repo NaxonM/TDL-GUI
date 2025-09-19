@@ -55,41 +55,37 @@ class AdvancedSettingsDialog(QDialog):
         col1_layout = QVBoxLayout()
         concurrency_group = QGroupBox("Concurrency")
         concurrency_form = QFormLayout(concurrency_group)
-        tasks_widget, self.concurrent_tasks_spinbox = self._create_spinbox_with_arrows(
-            1, 16, 2
-        )
+        self.concurrent_tasks_spinbox = self._create_spinbox(1, 16, 2)
         self.concurrent_tasks_spinbox.setToolTip(
             "Set the maximum number of files to download at the same time."
         )
-        threads_widget, self.threads_per_task_spinbox = (
-            self._create_spinbox_with_arrows(1, 16, 4)
-        )
+        self.threads_per_task_spinbox = self._create_spinbox(1, 16, 4)
         self.threads_per_task_spinbox.setToolTip(
             "Set the maximum number of parallel connections for a single file."
         )
-        concurrency_form.addRow("Concurrent Tasks:", tasks_widget)
-        concurrency_form.addRow("Threads per Task:", threads_widget)
+        concurrency_form.addRow("Concurrent Tasks:", self.concurrent_tasks_spinbox)
+        concurrency_form.addRow("Threads per Task:", self.threads_per_task_spinbox)
         col1_layout.addWidget(concurrency_group)
 
         pool_group = QGroupBox("Connection")
         pool_form = QFormLayout(pool_group)
-        pool_widget, self.pool_spinbox = self._create_spinbox_with_arrows(0, 100, 8)
+        self.pool_spinbox = self._create_spinbox(0, 100, 8)
         self.pool_spinbox.setToolTip(
             "Advanced: The size of the DC pool for the Telegram client.\nLeave at 8 unless you have connection issues."
         )
-        pool_form.addRow("DC Pool Size:", pool_widget)
+        pool_form.addRow("DC Pool Size:", self.pool_spinbox)
         col1_layout.addWidget(pool_group)
 
         delay_group = QGroupBox("Rate Limiting")
         delay_form = QFormLayout(delay_group)
         delay_layout = QHBoxLayout()
-        delay_widget, self.delay_spinbox = self._create_spinbox_with_arrows(0, 99999, 0)
+        self.delay_spinbox = self._create_spinbox(0, 99999, 0)
         self.delay_spinbox.setToolTip(
             "Wait a specified amount of time between download tasks to avoid API rate limits."
         )
         self.delay_unit_combo = QComboBox()
         self.delay_unit_combo.addItems(["ms", "s", "m"])
-        delay_layout.addWidget(delay_widget, 1)
+        delay_layout.addWidget(self.delay_spinbox, 1)
         delay_layout.addWidget(self.delay_unit_combo)
         delay_form.addRow("Delay per Task:", delay_layout)
         col1_layout.addWidget(delay_group)
@@ -250,28 +246,6 @@ class AdvancedSettingsDialog(QDialog):
             "template": final_template,
         }
 
-    def _create_spinbox_with_arrows(self, min_val, max_val, default_val):
-        # This is a helper method copied from main_window.py
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-
-        spinbox = QSpinBox()
-        spinbox.setRange(min_val, max_val)
-        spinbox.setValue(default_val)
-        spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-
-        up_button = QToolButton(arrowType=Qt.ArrowType.UpArrow, clicked=spinbox.stepUp)
-        down_button = QToolButton(
-            arrowType=Qt.ArrowType.DownArrow, clicked=spinbox.stepDown
-        )
-
-        layout.addWidget(spinbox, 1)
-        layout.addWidget(down_button)
-        layout.addWidget(up_button)
-        return container, spinbox
-
     def insert_template_placeholder(self, placeholder):
         self.template_combo.setCurrentText("Custom...")
         self.template_input.setFocus()
@@ -283,23 +257,9 @@ class AdvancedSettingsDialog(QDialog):
             cursor_pos + len(f"{{{{ .{placeholder} }}}}")
         )
 
-    def _create_spinbox_with_arrows(self, min_val, max_val, default_val):
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-
+    def _create_spinbox(self, min_val, max_val, default_val):
         spinbox = QSpinBox()
         spinbox.setRange(min_val, max_val)
         spinbox.setValue(default_val)
-        spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-
-        up_button = QToolButton(arrowType=Qt.ArrowType.UpArrow, clicked=spinbox.stepUp)
-        down_button = QToolButton(
-            arrowType=Qt.ArrowType.DownArrow, clicked=spinbox.stepDown
-        )
-
-        layout.addWidget(spinbox, 1)
-        layout.addWidget(down_button)
-        layout.addWidget(up_button)
-        return container, spinbox
+        spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.UpDownArrows)
+        return spinbox

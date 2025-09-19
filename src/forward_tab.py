@@ -182,14 +182,17 @@ class ForwardTab(QWidget):
         self.update_status_label(f"Error (Code: {exit_code})")
         self.task_failed.emit(log)
 
-    def set_running_state(self, is_running):
+    def set_running_state(self, is_running, is_active_task=False):
         """Enable or disable controls based on task status."""
+        is_this_task_running = is_running and is_active_task
+
         for control in self.controls:
             control.setEnabled(not is_running)
 
-        self.start_forward_button.setEnabled(True)
+        self.start_forward_button.setEnabled(not is_running or is_active_task)
         self.start_forward_button.setText(
-            "Stop Forwarding" if is_running else "Start Forward"
+            "Stop Forwarding" if is_this_task_running else "Start Forward"
         )
+
         if not is_running:
             self.update_status_label("Idle")

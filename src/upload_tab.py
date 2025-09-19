@@ -265,12 +265,14 @@ class UploadTab(QWidget):
             self.clear_progress_widgets()
         self.task_finished.emit(exit_code) # Pass the signal on to the main window
 
-    def set_running_state(self, is_running):
+    def set_running_state(self, is_running, is_active_task=False):
         """Enable or disable controls based on task status."""
+        is_this_task_running = is_running and is_active_task
+
         for control in self.controls:
             control.setEnabled(not is_running)
 
-        self.start_upload_button.setEnabled(True)
+        self.start_upload_button.setEnabled(not is_running or is_active_task)
         self.start_upload_button.setText(
-            "Stop Upload" if is_running else "Start Upload"
+            "Stop Upload" if is_this_task_running else "Start Upload"
         )

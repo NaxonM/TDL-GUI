@@ -282,21 +282,25 @@ class DownloadTab(QWidget):
         self.has_started_download = True
         self.worker.start()
 
-    def set_running_state(self, is_running):
+    def set_running_state(self, is_running, is_active_task=False):
         """Enable or disable controls based on task status."""
+        is_this_task_running = is_running and is_active_task
+
+        # Disable all controls except the main action button
         for control in self.controls:
             control.setEnabled(not is_running)
 
-        # The start/stop button should always be enabled.
-        self.start_download_button.setEnabled(True)
+        # Handle the main action button state
+        self.start_download_button.setEnabled(not is_running or is_active_task)
         self.start_download_button.setText(
-            "Stop Download" if is_running else "Start Download"
+            "Stop Download" if is_this_task_running else "Start Download"
         )
-        if not is_running and self.resume_download_button.isEnabled():
-            # Don't disable resume button if it was enabled
-            pass
-        else:
-            self.resume_download_button.setEnabled(not is_running)
+
+        # Handle the resume button state
+        can_resume = (
+            self.has_started_download
+        )  # You can resume if a download has ever been started
+        self.resume_download_button.setEnabled(not is_running and can_resume)
 
     def add_download_progress_widget(self, file_id):
         if file_id not in self.progress_widgets:

@@ -221,11 +221,12 @@ class MainWindow(QMainWindow):
 
     def set_task_running_ui_state(self, is_running, tab_index=-1):
         """Enables or disables UI controls based on the state of a running task."""
-        self.download_tab.set_running_state(is_running)
-        self.upload_tab.set_running_state(is_running)
-        self.forward_tab.set_running_state(is_running)
-        self.export_tab.set_running_state(is_running)
-        self.chats_tab.set_running_state(is_running)
+        self.download_tab.set_running_state(is_running, is_active_task=(tab_index == 0))
+        self.upload_tab.set_running_state(is_running, is_active_task=(tab_index == 1))
+        self.forward_tab.set_running_state(is_running, is_active_task=(tab_index == 2))
+        self.export_tab.set_running_state(is_running, is_active_task=(tab_index == 3))
+        self.chats_tab.set_running_state(is_running, is_active_task=(tab_index == 4))
+
         for widget in self.global_controls:
             widget.setEnabled(not is_running)
 

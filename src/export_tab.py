@@ -216,9 +216,15 @@ class ExportTab(QWidget):
         self.worker.taskFinished.connect(self.task_finished)
         self.worker.start()
 
-    def set_running_state(self, is_running):
+    def set_running_state(self, is_running, is_active_task=False):
+        """Enable or disable controls based on task status."""
+        # In this tab, we disable all controls if any task is running,
+        # as export is a lighter operation and shouldn't run concurrently.
         for control in self.controls:
             control.setEnabled(not is_running)
+
+        # The main button should also be disabled if a task is running.
+        self.run_export_button.setEnabled(not is_running)
 
     def set_export_source(self, source):
         self.export_source_input.setText(source)

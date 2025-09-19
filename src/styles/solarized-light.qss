@@ -116,10 +116,11 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    border: 5px solid transparent;
+    border: 4px solid transparent;
     border-top-color: #073642; /* base02 */
     width: 0;
     height: 0;
+    margin: 5px auto 0;
 }
 
 QComboBox QAbstractItemView {
@@ -464,10 +465,37 @@ QSplitter::handle:vertical {
 }
 
 /* === SPIN BOX ARROWS === */
-QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    height: 50%; /* 50% of the QSpinBox height */
+    border-bottom: 1px solid #93a1a1;
+    border-top-right-radius: 5px;
+}
+
 QSpinBox::down-button, QDoubleSpinBox::down-button {
-    background-color: #eee8d5;
-    border: 1px solid #93a1a1;
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    height: 50%;
+    border-bottom-right-radius: 5px;
+}
+
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    border: 4px solid transparent;
+    border-bottom-color: #073642;
+    width: 0;
+    height: 0;
+    margin: 3px auto 0;
+}
+
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    border: 4px solid transparent;
+    border-top-color: #073642;
+    width: 0;
+    height: 0;
+    margin: 3px auto 0;
 }
 
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
@@ -496,4 +524,39 @@ QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
 #DownloadTab #BrowseButton {
     padding: 4px;
     min-width: 0px;
+}
+
+/* === WIDGET-SPECIFIC === */
+DownloadProgressWidget {
+    border: 1px solid #93a1a1;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    padding: 2px;
+}
+
+#filenameLabel {
+    font-weight: bold;
+}
+
+#statsLabel {
+    font-size: 11px;
+    color: #586e75;
+}
+
+#warningLabel {
+    color: #dc322f;
+    font-weight: bold;
+}
+
+#statusLabel {
+    color: #586e75;
+}
+
+#dangerButton {
+    background-color: #dc322f;
+    border-color: #cb4b16;
+}
+
+#dangerButton:hover {
+    background-color: #cb4b16;
 }

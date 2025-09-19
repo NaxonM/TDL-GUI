@@ -155,6 +155,9 @@ class ChatsTab(QWidget):
                 "Could not parse the chat list from tdl. See logs for details.",
             )
 
-    def set_running_state(self, is_running):
+    def set_running_state(self, is_running, is_active_task=False):
+        """Enable or disable controls based on task status."""
+        # The main interaction on this tab is refreshing the list.
+        # We should disable all controls if any task is running anywhere.
         for control in self.controls:
             control.setEnabled(not is_running)

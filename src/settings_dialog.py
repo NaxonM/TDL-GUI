@@ -249,9 +249,7 @@ class SettingsDialog(QDialog):
         reset_settings_button.clicked.connect(self._handle_reset_settings)
 
         reset_data_button = QPushButton("Reset All TDL Data")
-        reset_data_button.setStyleSheet(
-            "background-color: #D32F2F; border-color: #B71C1C;"
-        )
+        reset_data_button.setObjectName("dangerButton")
         reset_data_button.setToolTip(
             "Deletes all tdl data, including login sessions and logs."
         )
