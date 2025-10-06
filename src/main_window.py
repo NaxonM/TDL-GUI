@@ -80,7 +80,8 @@ class MainWindow(QMainWindow):
         self._init_ui()
         self._setup_connections()
         self.logger.info("Application initialized.")
-        self.logger.info(f"Settings loaded from {self.settings_manager.settings_path}")
+        settings_path = getattr(self.settings_manager, "settings_path", "unknown")
+        self.logger.info(f"Settings loaded from {settings_path}")
 
     def _init_ui(self):
         """Initializes the main UI components."""
@@ -426,10 +427,12 @@ class MainWindow(QMainWindow):
         self.update_manager = UpdateManager(url, version, self.tdl_path)
         self.update_manager.progress.connect(update_dialog.update_progress)
         self.update_manager.error.connect(self.on_update_error)
+        self.update_manager.error.connect(lambda _: update_dialog.reject())
         self.update_manager.finished.connect(self.on_update_finished)
+        self.update_manager.finished.connect(lambda *args: update_dialog.accept())
 
-        self.update_manager.start_download()
-        update_dialog.exec()
+        if self.update_manager.start_download():
+            update_dialog.exec()
 
     def on_update_error(self, error_message):
         self.logger.error(f"Update failed: {error_message}")
@@ -444,7 +447,8 @@ class MainWindow(QMainWindow):
         )
         # Use DETACHED_PROCESS to run the updater independently
         subprocess.Popen(
-            [updater_script_path], creationflags=subprocess.DETACHED_PROCESS
+            ["cmd", "/c", updater_script_path],
+            creationflags=subprocess.DETACHED_PROCESS,
         )
         self.app.quit()
 

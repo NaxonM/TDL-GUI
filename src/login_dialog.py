@@ -33,12 +33,12 @@ class LoginDialog(QDialog):
 
         self.warning_label = QLabel()
         self.warning_label.setWordWrap(True)
-        self.warning_label.setObjectName("warningLabel")
+        self.warning_label.setStyleSheet("color: #D32F2F; font-weight: bold;")
         self.warning_label.hide()
 
         self.status_label = QLabel("Starting login process...")
         self.status_label.setWordWrap(True)
-        self.status_label.setObjectName("statusLabel")
+        self.status_label.setStyleSheet("color: #757575;")  # A softer grey color
 
         self.prompt_label = QLabel()
         self.prompt_label.setWordWrap(True)

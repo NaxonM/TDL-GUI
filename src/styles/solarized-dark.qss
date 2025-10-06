@@ -333,64 +333,20 @@ QSlider::groove:horizontal {
 }
 
 /* === SPIN BOX ARROWS === */
-QSpinBox::up-button,
-QDoubleSpinBox::up-button {
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 20px;
-    height: 15px;
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
     background-color: #073642;
-    border-left: 1px solid #586e75;
-    border-top-right-radius: 4px;
+    border: 1px solid #586e75;
 }
 
-QSpinBox::up-button:hover,
-QDoubleSpinBox::up-button:hover {
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
     background-color: #586e75;
 }
 
-QSpinBox::up-button:pressed,
-QDoubleSpinBox::up-button:pressed {
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
     background-color: #268bd2;
-}
-
-QSpinBox::down-button,
-QDoubleSpinBox::down-button {
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 20px;
-    height: 15px;
-    background-color: #073642;
-    border-left: 1px solid #586e75;
-    border-bottom-right-radius: 4px;
-}
-
-QSpinBox::down-button:hover,
-QDoubleSpinBox::down-button:hover {
-    background-color: #586e75;
-}
-
-QSpinBox::down-button:pressed,
-QDoubleSpinBox::down-button:pressed {
-    background-color: #268bd2;
-}
-
-QSpinBox::up-arrow,
-QDoubleSpinBox::up-arrow {
-    border: 5px solid transparent;
-    border-bottom-color: #839496;
-    width: 0;
-    height: 0;
-    margin: 0 auto;
-}
-
-QSpinBox::down-arrow,
-QDoubleSpinBox::down-arrow {
-    border: 5px solid transparent;
-    border-top-color: #839496;
-    width: 0;
-    height: 0;
-    margin: 0 auto;
 }
 
 QSlider::handle:horizontal {

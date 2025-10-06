@@ -1,10 +1,10 @@
 import os
 import sys
-import time
 import urllib.request
 import zipfile
 import tempfile
 import subprocess
+import shutil
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
 from PyQt6.QtWidgets import (
     QDialog,
@@ -125,22 +125,79 @@ del "%~f0"
 
 class UpdateManager(QObject):
     """Manages the tdl update process by running a worker in a thread."""
+
+    progress = pyqtSignal(int)
+    error = pyqtSignal(str)
+    finished = pyqtSignal(str, str)
+
     def __init__(self, url, version, current_tdl_path):
         super().__init__()
         self.url = url
         self.version = version
         self.current_tdl_path = current_tdl_path
-        self.temp_dir = tempfile.mkdtemp(prefix="tdl-update-")
+        self.temp_dir = None
         self.thread = None
         self.worker = None
 
-    def start(self):
+    def start_download(self):
+        if self.thread and self.thread.isRunning():
+            self.error.emit("An update is already in progress.")
+            return False
+
+        self._cleanup_stale_temp_dirs()
+        self.temp_dir = tempfile.mkdtemp(prefix="tdl-update-")
         self.thread = QThread()
-        self.worker = UpdateWorker(self.url, self.version, self.current_tdl_path, self.temp_dir)
+        self.worker = UpdateWorker(
+            self.url, self.version, self.current_tdl_path, self.temp_dir
+        )
         self.worker.moveToThread(self.thread)
+
         self.thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self.progress.emit)
+        self.worker.error.connect(self._on_worker_error)
+        self.worker.finished.connect(self._on_worker_finished)
+
         self.thread.start()
-        return self.worker
+        return True
+
+    def start(self):  # pragma: no cover - backward compatibility shim
+        return self.start_download()
+
+    def _on_worker_error(self, message):
+        self.error.emit(message)
+        self._teardown(cleanup_temp=True)
+
+    def _on_worker_finished(self, updater_script_path, version):
+        self.finished.emit(updater_script_path, version)
+        self._teardown(cleanup_temp=False)
+
+    def _teardown(self, cleanup_temp):
+        thread = self.thread
+        if thread and thread.isRunning():
+            thread.quit()
+            thread.wait()
+
+        self.thread = None
+        self.worker = None
+
+        if cleanup_temp and self.temp_dir and os.path.isdir(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+        self.temp_dir = None
+
+    @staticmethod
+    def _cleanup_stale_temp_dirs():
+        base_temp = tempfile.gettempdir()
+        prefix = "tdl-update-"
+        try:
+            for name in os.listdir(base_temp):
+                if not name.startswith(prefix):
+                    continue
+                path = os.path.join(base_temp, name)
+                if os.path.isdir(path):
+                    shutil.rmtree(path, ignore_errors=True)
+        except OSError:
+            pass
 
 
 class UpdateDialog(QDialog):

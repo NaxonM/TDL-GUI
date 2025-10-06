@@ -1,4 +1,4 @@
-from PyQt6.QtCore import pyqtSignal, QDate, QDateTime
+from PyQt6.QtCore import pyqtSignal, QDate, QDateTime, QTime
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -105,6 +105,8 @@ class ExportTab(QWidget):
         time_range_widget = QWidget()
         time_range_layout = QHBoxLayout(time_range_widget)
         self.from_date_edit = QDateEdit(calendarPopup=True, displayFormat="yyyy-MM-dd")
+        current_date = QDate.currentDate()
+        self.from_date_edit.setDate(QDate(current_date.year(), current_date.month(), 1))
         self.to_date_edit = QDateEdit(
             calendarPopup=True, displayFormat="yyyy-MM-dd", date=QDate.currentDate()
         )
@@ -148,6 +150,7 @@ class ExportTab(QWidget):
 
     def open_advanced_export_dialog(self):
         dialog = AdvancedExportDialog(self)
+        dialog.set_settings(self.advanced_export_settings)
         if dialog.exec():
             self.advanced_export_settings = dialog.get_settings()
             self.logger.info("Advanced export settings saved.")
@@ -178,8 +181,28 @@ class ExportTab(QWidget):
 
         export_type_index = self.export_type_combo.currentIndex()
         if export_type_index == 1:
-            from_dt = QDateTime(self.from_date_edit.date())
-            to_dt = QDateTime(self.to_date_edit.date()).addDays(1).addSecs(-1)
+            from_date = self.from_date_edit.date()
+            to_date = self.to_date_edit.date()
+
+            if not from_date.isValid() or not to_date.isValid():
+                QMessageBox.warning(
+                    self,
+                    "Input Error",
+                    "Please provide valid start and end dates for the export.",
+                )
+                return
+
+            from_dt = QDateTime(from_date, QTime(0, 0, 0))
+            to_dt = QDateTime(to_date, QTime(23, 59, 59, 999))
+
+            if from_dt > to_dt:
+                QMessageBox.warning(
+                    self,
+                    "Input Error",
+                    "The start date must be before or equal to the end date.",
+                )
+                return
+
             command.extend(
                 [
                     "-T",
@@ -201,12 +224,34 @@ class ExportTab(QWidget):
             command.append("--all")
 
         if self.advanced_export_settings:
-            if self.advanced_export_settings["filter"]:
-                command.extend(["--filter", self.advanced_export_settings["filter"]])
-            if self.advanced_export_settings["reply"]:
-                command.extend(["--reply", self.advanced_export_settings["reply"]])
-            if self.advanced_export_settings["topic"]:
-                command.extend(["--topic", self.advanced_export_settings["topic"]])
+            normalized_filter = ""
+            raw_filter = self.advanced_export_settings.get("filter", "").strip()
+            contains_term = (
+                self.advanced_export_settings.get("contains_term", "").strip()
+            )
+
+            term_filter = self._build_contains_filter_expression(contains_term)
+
+            if raw_filter and term_filter:
+                combined = f"({raw_filter}) && ({term_filter})"
+            elif term_filter:
+                combined = term_filter
+            else:
+                combined = raw_filter
+
+            if combined:
+                normalized_filter = self._normalize_filter_expression(combined)
+
+            if normalized_filter:
+                command.extend(["--filter", normalized_filter])
+
+            reply_value = self.advanced_export_settings.get("reply", "").strip()
+            if reply_value:
+                command.extend(["--reply", reply_value])
+
+            topic_value = self.advanced_export_settings.get("topic", "").strip()
+            if topic_value:
+                command.extend(["--topic", topic_value])
 
         self.worker = self.tdl_runner.run(command)
         if not self.worker:
@@ -228,3 +273,33 @@ class ExportTab(QWidget):
 
     def set_export_source(self, source):
         self.export_source_input.setText(source)
+
+    @staticmethod
+    def _normalize_filter_expression(filter_expr: str) -> str:
+        if not filter_expr:
+            return ""
+
+        expr = filter_expr.strip()
+        if len(expr) >= 2 and expr[0] == expr[-1] and expr[0] in {'"', "'"}:
+            expr = expr[1:-1].strip()
+
+        normalized = expr
+
+        replacements = {
+            "Message.Message": "Message",
+            "Message.Text": "Message",
+            "Message.Caption": "Message",
+        }
+
+        for before, after in replacements.items():
+            normalized = normalized.replace(before, after)
+
+        return normalized.strip()
+
+    @staticmethod
+    def _build_contains_filter_expression(term: str) -> str:
+        if not term:
+            return ""
+
+        escaped = term.replace("\"", r"\"")
+        return f'Message contains "{escaped}"'

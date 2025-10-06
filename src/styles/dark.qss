@@ -121,11 +121,10 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    border: 4px solid transparent;
+    border: 5px solid transparent;
     border-top-color: #e0e0e0;
     width: 0;
     height: 0;
-    margin: 5px auto 0;
 }
 
 QComboBox QAbstractItemView {
@@ -547,37 +546,10 @@ QDockWidget::title {
 }
 
 /* === SPIN BOX ARROWS === */
-QSpinBox::up-button, QDoubleSpinBox::up-button {
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 20px;
-    height: 50%; /* 50% of the QSpinBox height */
-    border-bottom: 1px solid #3c3c3c;
-    border-top-right-radius: 6px;
-}
-
+QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 20px;
-    height: 50%;
-    border-bottom-right-radius: 6px;
-}
-
-QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-    border: 4px solid transparent;
-    border-bottom-color: #e0e0e0;
-    width: 0;
-    height: 0;
-    margin: 3px auto 0;
-}
-
-QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-    border: 4px solid transparent;
-    border-top-color: #e0e0e0;
-    width: 0;
-    height: 0;
-    margin: 3px auto 0;
+    background-color: #313132;
+    border: 1px solid #3c3c3c;
 }
 
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
@@ -646,74 +618,4 @@ QLabel[class="secondary"] {
 #DownloadTab #BrowseButton {
     padding: 4px;
     min-width: 0px;
-}
-
-/* === WIDGET-SPECIFIC === */
-DownloadProgressWidget {
-    border: 1px solid #3c3c3c;
-    border-radius: 4px;
-    margin-bottom: 3px;
-    padding: 2px;
-}
-
-#filenameLabel {
-    font-weight: bold;
-}
-
-#statsLabel {
-    font-size: 11px;
-    color: #a0a0a0;
-}
-
-#warningLabel {
-    color: #c74646;
-    font-weight: bold;
-}
-
-#statusLabel {
-    color: #a0a0a0;
-}
-
-#dangerButton {
-    background-color: #c74646;
-    border-color: #b73636;
-}
-
-#dangerButton:hover {
-    background-color: #d75656;
-}
-
-/* === WIDGET-SPECIFIC === */
-DownloadProgressWidget {
-    border: 1px solid #3c3c3c;
-    border-radius: 4px;
-    margin-bottom: 3px;
-    padding: 2px;
-}
-
-#filenameLabel {
-    font-weight: bold;
-}
-
-#statsLabel {
-    font-size: 11px;
-    color: #a0a0a0;
-}
-
-#warningLabel {
-    color: #c74646;
-    font-weight: bold;
-}
-
-#statusLabel {
-    color: #a0a0a0;
-}
-
-#dangerButton {
-    background-color: #c74646;
-    border-color: #b73636;
-}
-
-#dangerButton:hover {
-    background-color: #d75656;
 }

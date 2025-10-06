@@ -16,14 +16,7 @@ class DownloadProgressWidget(QWidget):
 
         self.filename_label = QLabel(self.file_id)
         self.filename_label.setWordWrap(True)
-        # Set object names for styling
-        self.filename_label.setObjectName("filenameLabel")
-        self.size_label = QLabel("Size: N/A")
-        self.eta_label = QLabel("ETA: N/A")
-        self.speed_label = QLabel("Speed: N/A")
-        self.size_label.setObjectName("statsLabel")
-        self.eta_label.setObjectName("statsLabel")
-        self.speed_label.setObjectName("statsLabel")
+        self.filename_label.setStyleSheet("font-weight: bold;")
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setFormat("%p%")
@@ -33,6 +26,15 @@ class DownloadProgressWidget(QWidget):
 
         stats_layout = QHBoxLayout()
         stats_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.size_label = QLabel("Size: N/A")
+        self.eta_label = QLabel("ETA: N/A")
+        self.speed_label = QLabel("Speed: N/A")
+
+        small_font_style = "font-size: 11px; color: grey;"
+        self.size_label.setStyleSheet(small_font_style)
+        self.eta_label.setStyleSheet(small_font_style)
+        self.speed_label.setStyleSheet(small_font_style)
 
         stats_layout.addWidget(self.size_label)
         stats_layout.addStretch()
@@ -46,6 +48,15 @@ class DownloadProgressWidget(QWidget):
 
         # Add a frame for better visual separation
         self.setContentsMargins(0, 0, 0, 0)
+        self.setStyleSheet(
+            """
+            DownloadProgressWidget {
+                border: 1px solid #D5DBDB;
+                border-radius: 4px;
+                margin-bottom: 3px;
+            }
+        """
+        )
 
     def update_progress(self, data):
         """Updates the progress bar and labels with new data."""

@@ -23,9 +23,15 @@ class AdvancedExportDialog(QDialog):
         form_layout = QFormLayout(group)
 
         self.export_filter_input = QLineEdit()
-        self.export_filter_input.setPlaceholderText("e.g., 'IsPhoto && HasViews'")
+        self.export_filter_input.setPlaceholderText("e.g., IsPhoto && HasViews")
         self.export_filter_input.setToolTip(
             "Filter messages using a powerful expression.\nSee tdl documentation for syntax."
+        )
+
+        self.contains_term_input = QLineEdit()
+        self.contains_term_input.setPlaceholderText("e.g., #hashtag or keyword")
+        self.contains_term_input.setToolTip(
+            "Adds a quick filter that keeps messages whose text contains the given hashtag or term."
         )
 
         self.export_reply_input = QLineEdit()
@@ -45,6 +51,7 @@ class AdvancedExportDialog(QDialog):
         )
 
         form_layout.addRow("Filter Expression:", self.export_filter_input)
+        form_layout.addRow("Contains Term:", self.contains_term_input)
         form_layout.addRow("Replies to Message ID:", self.export_reply_input)
         form_layout.addRow("Topic ID:", self.export_topic_input)
 
@@ -61,6 +68,16 @@ class AdvancedExportDialog(QDialog):
     def get_settings(self):
         return {
             "filter": self.export_filter_input.text(),
+            "contains_term": self.contains_term_input.text(),
             "reply": self.export_reply_input.text(),
             "topic": self.export_topic_input.text(),
         }
+
+    def set_settings(self, settings):
+        if not settings:
+            return
+
+        self.export_filter_input.setText(settings.get("filter", ""))
+        self.contains_term_input.setText(settings.get("contains_term", ""))
+        self.export_reply_input.setText(settings.get("reply", ""))
+        self.export_topic_input.setText(settings.get("topic", ""))

@@ -102,11 +102,10 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    border: 4px solid transparent;
+    border: 5px solid transparent;
     border-top-color: #D8DEE9; /* nord4 */
     width: 0;
     height: 0;
-    margin: 5px auto 0;
 }
 
 QComboBox QAbstractItemView {
@@ -333,37 +332,10 @@ QSlider::groove:horizontal {
 }
 
 /* === SPIN BOX ARROWS === */
-QSpinBox::up-button, QDoubleSpinBox::up-button {
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 20px;
-    height: 14px;
-    border-bottom: 1px solid #4C566A;
-    border-top-right-radius: 4px;
-}
-
+QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 20px;
-    height: 14px;
-    border-bottom-right-radius: 4px;
-}
-
-QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-    border: 4px solid transparent;
-    border-bottom-color: #D8DEE9;
-    width: 0;
-    height: 0;
-    margin: 3px auto 0;
-}
-
-QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-    border: 4px solid transparent;
-    border-top-color: #D8DEE9;
-    width: 0;
-    height: 0;
-    margin: 3px auto 0;
+    background-color: #434C5E;
+    border: 1px solid #4C566A;
 }
 
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
@@ -415,39 +387,4 @@ QPlainTextEdit.log-widget, QTextEdit.log-widget {
 #DownloadTab #BrowseButton {
     padding: 4px;
     min-width: 0px;
-}
-
-/* === WIDGET-SPECIFIC === */
-DownloadProgressWidget {
-    border: 1px solid #434C5E;
-    border-radius: 4px;
-    margin-bottom: 3px;
-    padding: 2px;
-}
-
-#filenameLabel {
-    font-weight: bold;
-}
-
-#statsLabel {
-    font-size: 11px;
-    color: #D8DEE9;
-}
-
-#warningLabel {
-    color: #BF616A;
-    font-weight: bold;
-}
-
-#statusLabel {
-    color: #D8DEE9;
-}
-
-#dangerButton {
-    background-color: #BF616A;
-    border-color: #BF616A;
-}
-
-#dangerButton:hover {
-    background-color: #D08770;
 }
